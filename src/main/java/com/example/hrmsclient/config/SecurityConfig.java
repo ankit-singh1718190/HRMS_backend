@@ -31,7 +31,8 @@ public class SecurityConfig {
         "/api/employee/register",
         "/api/attendance/**",
         "/api/admin/register",
-        "/api/attendance/today"
+        "/api/attendance/today",
+        "/api/leaves/apply"
         
     };
 
@@ -44,7 +45,11 @@ public class SecurityConfig {
         "/api/dashboard/employees",
         "/api/dashboard/attendance",
         "/api/dashboard/departments",
-        "/api/dashboard/payroll/**"
+        "/api/dashboard/payroll/**",
+        "/api/leaves/*/approve",
+        "/api/leaves/*/pending",
+        "/api/leaves/*/reject",
+        "/api/leaves/employee/**"
     };
 
 
@@ -57,7 +62,11 @@ public class SecurityConfig {
         "/api/payroll/**",
         "/api/dashboard/overview",
         "/api/dashboard/employees",
-        "/api/dashboard/attendance"
+        "/api/dashboard/attendance",
+        "/api/leaves/*/approve",
+        "/api/leaves/*/pending",
+        "/api/leaves/*/reject",
+        "/api/leaves/employee/**"
     };
 
     @Bean

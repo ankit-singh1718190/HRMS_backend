@@ -9,6 +9,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -72,24 +73,26 @@ public class AttendanceController {
         Attendance attendance = attendanceService.getTodayAttendance(
                 userDetails.getUsername());
 
+        Map<String, Object> response = new HashMap<>();
+
         if (attendance == null) {
-            return ResponseEntity.ok(Map.of(
-                    "status", "success",
-                    "message", "No attendance for today",
-                    "data", null
-            ));
+            response.put("status", "success");
+            response.put("message", "No attendance for today");
+            response.put("data", null);
+            return ResponseEntity.ok(response);
         }
 
-        return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "data", Map.of(
-                        "attendanceId", attendance.getId(),
-                        "checkInTime", attendance.getCheckIn(),
-                        "checkOutTime", attendance.getCheckOut(),
-                        "workingHours", attendance.getWorkingHours(),
-                        "latitude", attendance.getCheckInLatitude(),
-                        "longitude", attendance.getCheckInLongitude()
-                )
-        ));
+        Map<String, Object> data = new HashMap<>();
+        data.put("attendanceId", attendance.getId());
+        data.put("checkInTime", attendance.getCheckIn());
+        data.put("checkOutTime", attendance.getCheckOut());
+        data.put("workingHours", attendance.getWorkingHours());
+        data.put("latitude", attendance.getCheckInLatitude());
+        data.put("longitude", attendance.getCheckInLongitude());
+        data.put("address", attendance.getCheckInAddress() != null ? attendance.getCheckInAddress() : "");
+        response.put("status", "success");
+        response.put("data", data);
+
+        return ResponseEntity.ok(response);
     }
 }

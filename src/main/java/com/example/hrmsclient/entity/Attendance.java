@@ -64,13 +64,22 @@ public class Attendance {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
-    @Transient
-    public Duration getWorkingHours() {
-        if (checkIn != null && checkOut != null)
-            return Duration.between(checkIn, checkOut);
-        return Duration.ZERO;
-    }
+	@Transient
+	public String getWorkingHours() {
 
+	    if (checkIn == null) {
+	        return "0h 0m";
+	    }
+
+	    LocalDateTime endTime = (checkOut != null) ? checkOut : LocalDateTime.now();
+
+	    Duration duration = Duration.between(checkIn, endTime);
+
+	    long hours = duration.toHours();
+	    long minutes = duration.toMinutesPart();
+
+	    return hours + "h " + minutes + "m";
+	}
     public Long getId()                        { return id; }
     public Employee getEmployee()              { return employee; }
     public LocalDate getAttendanceDate()       { return attendanceDate; }

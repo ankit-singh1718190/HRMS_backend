@@ -67,18 +67,12 @@ public class Attendance {
 	@Transient
 	public String getWorkingHours() {
 
-	    if (checkIn == null) {
-	        return "0h 0m";
-	    }
+	    if (checkIn == null) return "—";
 
 	    LocalDateTime endTime = (checkOut != null) ? checkOut : LocalDateTime.now();
-
 	    Duration duration = Duration.between(checkIn, endTime);
 
-	    long hours = duration.toHours();
-	    long minutes = duration.toMinutesPart();
-
-	    return hours + "h " + minutes + "m";
+	    return duration.toHours() + "h " + duration.toMinutesPart() + "m";
 	}
     public Long getId()                        { return id; }
     public Employee getEmployee()              { return employee; }

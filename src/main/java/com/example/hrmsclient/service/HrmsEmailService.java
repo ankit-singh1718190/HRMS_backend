@@ -3,10 +3,11 @@ package com.example.hrmsclient.service;
 import com.example.hrmsclient.entity.Attendance;
 import com.example.hrmsclient.entity.Employee;
 import com.example.hrmsclient.entity.LeaveRequest;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
+import java.time.Duration;
 import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -153,35 +154,43 @@ public class HrmsEmailService {
             log.severe("Failed to send leave rejected email: " + e.getMessage());
         }
     }
-    //  3. ATTENDANCE
-    @Async
-    public void sendAttendanceMarkedEmail(Attendance attendance) {
-        try {
-            Employee emp = attendance.getEmployee();
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("employeeName", emp.getFullName());
-            vars.put("date",         attendance.getAttendanceDate().format(DATE_FMT));
-            vars.put("status",       attendance.getStatus().name());
-            vars.put("checkIn",      attendance.getCheckIn() != null
-                ? attendance.getCheckIn().toLocalTime().toString() : "—");
-            vars.put("checkOut",     attendance.getCheckOut() != null
-                ? attendance.getCheckOut().toLocalTime().toString() : "—");
-            vars.put("workingHours", attendance.getCheckIn() != null
-                                  && attendance.getCheckOut() != null
-                ? attendance.getWorkingHours().toHours() + "h " +
-                  attendance.getWorkingHours().toMinutesPart() + "m" : "—");
-            vars.put("companyName",  companyName);
+//  3. ATTENDANCE
+@Async
+public void sendAttendanceMarkedEmail(Attendance attendance) {
+    try {
+        Employee emp = attendance.getEmployee();
+        Map<String, Object> vars = new HashMap<>();
 
-            emailService.sendTemplatedEmailAsync(
+        vars.put("employeeName", emp.getFullName());
+        vars.put("date", attendance.getAttendanceDate().format(DATE_FMT));
+        vars.put("status", attendance.getStatus().name());
+
+        vars.put("checkIn", attendance.getCheckIn() != null
+                ? attendance.getCheckIn().toLocalTime().toString()
+                : "—");
+
+        vars.put("checkOut", attendance.getCheckOut() != null
+                ? attendance.getCheckOut().toLocalTime().toString()
+                : "—");
+
+        String workingHours = attendance.getCheckIn() != null
+                ? attendance.getWorkingHours()
+                : "—";
+
+        vars.put("workingHours", workingHours);
+        vars.put("companyName", companyName);
+
+        emailService.sendTemplatedEmailAsync(
                 emp.getEmailId(),
                 "Attendance Marked — " + attendance.getAttendanceDate().format(DATE_FMT),
                 "email/attendance-marked",
                 vars
-            );
-        } catch (Exception e) {
-            log.severe("Failed to send attendance email: " + e.getMessage());
-        }
+        );
+
+    } catch (Exception e) {
+        log.severe("Failed to send attendance email: " + e.getMessage());
     }
+}
 
     @Async
     public void sendAbsenteeAlert(Employee employee, String date) {

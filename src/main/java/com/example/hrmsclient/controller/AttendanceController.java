@@ -51,8 +51,7 @@ public class AttendanceController {
         Attendance attendance = attendanceService.checkOut(
                 userDetails.getUsername());
 
-        long hours   = attendance.getWorkingHours().toHours();
-        long minutes = attendance.getWorkingHours().toMinutesPart();
+        String workingHours = attendance.getWorkingHours();
 
         return ResponseEntity.ok(Map.of(
             "status",  "success",
@@ -61,7 +60,7 @@ public class AttendanceController {
                 "attendanceId", attendance.getId(),
                 "checkInTime",  attendance.getCheckIn().toString(),
                 "checkOutTime", attendance.getCheckOut().toString(),
-                "workingHours", hours + "h " + minutes + "m"
+                "workingHours", workingHours
             )
         ));
     }

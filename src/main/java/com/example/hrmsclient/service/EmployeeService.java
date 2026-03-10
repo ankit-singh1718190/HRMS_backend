@@ -47,7 +47,16 @@ public class EmployeeService {
         employee.setPassword(passwordEncoder.encode(request.getPassword()));
 
         Employee saved = employeeRepository.save(employee);
-        saved.setEmployeeId("EMP" + (1000 + saved.getId()));
+
+        // Generate a unique, human‑readable employeeId.
+        // Base like EMP1001, EMP1002, ... and if it already exists, append -1, -2, ...
+        String baseEmpId = "EMP" + (1000 + saved.getId());
+        String candidateEmpId = baseEmpId;
+        int suffix = 1;
+        while (employeeRepository.existsByEmployeeId(candidateEmpId)) {
+            candidateEmpId = baseEmpId + "-" + suffix++;
+        }
+        saved.setEmployeeId(candidateEmpId);
 
         saved = employeeRepository.save(saved);
 

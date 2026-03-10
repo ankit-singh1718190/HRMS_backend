@@ -77,7 +77,7 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     		WHERE a.employee.id = :employeeId
     		AND DATE(a.checkIn) = :date
     		""")
-    		Attendance findByEmployeeAndDate(Long employeeId, LocalDate date);
+    Attendance findByEmployeeAndDate(Long employeeId, LocalDate date);
 //    List<Attendance> findByDateAndCheckOutTimeIsNotNull(LocalDate date);
 //    List<Attendance> findByDateAndCheckInTimeIsNotNull(LocalDate date);
 }

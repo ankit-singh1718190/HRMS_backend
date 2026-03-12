@@ -52,7 +52,7 @@ public class Employee {
 
     private Long id;
 
-    @Column(unique = true, nullable = false, length = 20)
+    @Column(name = "employee_id", unique = true, nullable = true)
     private String employeeId;
 
     @Version
@@ -69,7 +69,7 @@ public class Employee {
     private boolean deleted = false;
     private LocalDateTime deletedAt;
 
-    // ── Personal ───────────────────────────────────────────────────
+    // ── Personal
     private String prefix;
     private String firstName;
     private String lastName;
@@ -91,17 +91,17 @@ public class Employee {
 
     @PastOrPresent private LocalDate joiningDate;
 
-    // ── Address ────────────────────────────────────────────────────
+    // ── Address
     private String houseNo;
     private String city;
     private String state;
 
-    // ── Sensitive ──────────────────────────────────────────────────
+    // ── Sensitive 
     @Column(length = 500) private String panNumber;
     @Column(length = 500) private String aadharNumber;
     @Column(length = 500) private String passportNumber;
 
-    // ── Family ─────────────────────────────────────────────────────
+    // ── Family
     private String fatherName;
     private String motherName;
     private String maritalStatus;
@@ -220,7 +220,6 @@ public class Employee {
     public List<LeaveRequest> getLeaveRequests() { return leaveRequests;     }
     public List<Attendance> getAttendances()   { return attendances;         }
 
-    // ── Setters ────────────────────────────────────────────────────
     public void setId(Long id)                                   { this.id                = id;                }
     public void setEmployeeId(String employeeId)                 { this.employeeId        = employeeId;        }
     public void setVersion(Long version)                         { this.version           = version;           }

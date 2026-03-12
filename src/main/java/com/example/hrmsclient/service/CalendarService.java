@@ -99,40 +99,47 @@ public class CalendarService {
         return calendar;
     }
 
-    // ─── Admin Calendar ───────────────────────────────────────────────────────
     public AdminCalendarDTO getAdminCalendar(int year, int month) {
         YearMonth ym    = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end   = ym.atEndOfMonth();
-
-        // Convert LeaveRequest entities → LeaveResponseDTO (avoids lazy loading issues)
         List<LeaveResponseDTO> leaves = leaveRepo.findAllByDateRange(start, end)
             .stream()
             .map(this::toLeaveDto)
             .collect(Collectors.toList());
 
-        // Convert Holiday entities → HolidayDTO (avoids returning raw entities)
         List<HolidayDTO> holidays = holidayService.getHolidaysByDateRange(start, end);
 
         return new AdminCalendarDTO(leaves, holidays);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+ // ─── Helpers 
     private LeaveResponseDTO toLeaveDto(LeaveRequest l) {
+
+        String employeeId = null;
+        String employeeName = null;
+
+        if (l.getEmployee() != null) {
+            employeeId = l.getEmployee().getEmployeeId();
+            employeeName = l.getEmployee().getFullName();
+        }
+
         return new LeaveResponseDTO(
-            l.getId(),
-            l.getEmployee().getEmployeeId(),
-            l.getEmployee().getFullName(),
-            l.getLeaveType(),
-            l.getStartDate(),
-            l.getEndDate(),
-            l.getLeaveDays(),
-            l.getStatus(),
-            l.getReason(),
-            l.getRejectionReason(),
-            l.getApprovedBy(),
-            l.getApprovedAt(),
-            l.getCreatedAt()
+                l.getId(),
+                employeeId,
+                employeeName,
+                l.getLeaveType(),
+                l.getStartDate(),
+                l.getEndDate(),
+                l.getLeaveDays(),
+                l.getPaidDays(),
+                l.getUnpaidDays(),
+                l.getStatus(),
+                l.getReason(),
+                l.getRejectionReason(),
+                l.getApprovedBy(),
+                l.getApprovedAt(),
+                l.getCreatedAt()
         );
     }
 }

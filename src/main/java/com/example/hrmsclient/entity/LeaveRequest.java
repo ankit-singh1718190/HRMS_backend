@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "hrms_leave_requests",
+@Table(name = "leave_requests",
     indexes = {
         @Index(name = "idx_leave_emp",    columnList = "employee_id"),
         @Index(name = "idx_leave_status", columnList = "status"),
@@ -23,8 +23,7 @@ import java.time.LocalDateTime;
 public class LeaveRequest {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "leave_seq")
-    @SequenceGenerator(name = "leave_seq", sequenceName = "leave_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

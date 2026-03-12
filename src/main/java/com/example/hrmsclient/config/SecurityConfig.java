@@ -38,13 +38,13 @@ public class SecurityConfig {
         "/api/leaves/apply",
         "/actuator/health",
         "/actuator/health/**",
-        "/actuator/info"
+        "/actuator/info",
+        "/api/employee/form16/**"
     };
 
     private static final String[] ADMIN_ONLY_URLS = {
         "/api/admin/**",
         "/api/employees/delete/**",
-        "/api/payroll/generate",
         "/api/dashboard/overview",
         "/api/reports/**",
         "/api/dashboard/employees",
@@ -54,7 +54,9 @@ public class SecurityConfig {
         "/api/leaves/*/approve",
         "/api/leaves/*/pending",
         "/api/leaves/*/reject",
-        "/api/leaves/employee/**"
+        "/api/leaves/employee/**",
+        "/api/admin/form16/**",
+        "/api/payroll/**"
     };
 
 
@@ -64,14 +66,15 @@ public class SecurityConfig {
         "/api/leave/approve/**",
         "/api/leave/reject/**",
         "/api/attendance/**",
-        "/api/payroll/**",
         "/api/dashboard/overview",
         "/api/dashboard/employees",
         "/api/dashboard/attendance",
         "/api/leaves/*/approve",
         "/api/leaves/*/pending",
         "/api/leaves/*/reject",
-        "/api/leaves/employee/**"
+        "/api/leaves/employee/**",
+        "/api/admin/form16/**",
+        "/api/payroll/**"
     };
 
     @Bean

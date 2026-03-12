@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-    name = "hrms_email_logs",
+    name = "email_logs",
     indexes = {
         @Index(name = "idx_email_log_recipient", columnList = "recipientEmail"),
         @Index(name = "idx_email_log_status",    columnList = "status"),
@@ -23,8 +23,7 @@ import java.time.LocalDateTime;
 public class EmailLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "email_log_seq")
-    @SequenceGenerator(name = "email_log_seq", sequenceName = "email_log_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(nullable = false, length = 200)

@@ -7,7 +7,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +17,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * PayrollService
+ * ─────────────────────────────────────────────────────────────────────────────
+ * ALL operations are ADMIN/HR triggered manually via PayrollController.
+ * No @Scheduled cron jobs — admin has full control.
+ *
+ * Manual Flow (Admin Dashboard):
+ *   STEP 1 → POST /api/payroll/generate?month=2025-03-01     (Generate)
+ *   STEP 2 → PUT  /api/payroll/{id}/approve                  (Approve)
+ *   STEP 3 → POST /api/payroll/{id}/process-payment          (Pay)
+ */
 @Service
 public class PayrollService {
 
@@ -42,115 +52,9 @@ public class PayrollService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 1 — AUTO GENERATE: 25th of every month at 9 AM
-    // HR reviews payroll from 25th–27th before approval
+    // STEP 1 — ADMIN MANUALLY GENERATES PAYROLL
+    // Triggered by: POST /api/payroll/generate?month=2025-03-01
     // ─────────────────────────────────────────────────────────────────────────
-    @Scheduled(cron = "0 0 9 25 * ?")
-    @Transactional
-    public void autoGenerateMonthlyPayroll() {
-        LocalDate currentMonth = LocalDate.now().withDayOfMonth(1);
-        log.info("=== AUTO PAYROLL GENERATION STARTED for {} ===", currentMonth);
-        generatePayrollForAllEmployees(currentMonth);
-        log.info("=== AUTO PAYROLL GENERATION COMPLETED ===");
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 2 — AUTO APPROVE: 27th of every month at 10 AM
-    // Auto-approves any still-PENDING payrolls after HR review window
-    // ─────────────────────────────────────────────────────────────────────────
-    @Scheduled(cron = "0 0 10 27 * ?")
-    @Transactional
-    public void autoApprovePayroll() {
-        LocalDate currentMonth = LocalDate.now().withDayOfMonth(1);
-        log.info("=== AUTO PAYROLL APPROVAL STARTED for {} ===", currentMonth);
-
-        List<Payroll> pendingPayrolls = payrollRepository
-                .findByPayrollMonthAndStatus(currentMonth, PayrollStatus.PENDING);
-
-        for (Payroll payroll : pendingPayrolls) {
-            payroll.setStatus(PayrollStatus.APPROVED);
-            payroll.setApprovedBy("SYSTEM_AUTO");
-            payrollRepository.save(payroll);
-        }
-
-        log.info("Auto-approved {} payrolls", pendingPayrolls.size());
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // STEP 3 — AUTO PAY: Last day of every month at 11 AM
-    // Processes bank transfer for all APPROVED payrolls
-    // ─────────────────────────────────────────────────────────────────────────
-    @Scheduled(cron = "0 0 11 L * ?")
-    @Transactional
-    public void autoProcessSalaryPayment() {
-        LocalDate currentMonth = LocalDate.now().withDayOfMonth(1);
-        log.info("=== AUTO SALARY PAYMENT STARTED for {} ===", currentMonth);
-
-        List<Payroll> approvedPayrolls = payrollRepository
-                .findByPayrollMonthAndStatus(currentMonth, PayrollStatus.APPROVED);
-
-        int success = 0, failed = 0;
-
-        for (Payroll payroll : approvedPayrolls) {
-            try {
-                processSinglePayment(payroll);
-                success++;
-            } catch (Exception e) {
-                log.error("Payment failed for employee {}: {}",
-                        payroll.getEmployee().getEmployeeId(), e.getMessage());
-                payroll.setStatus(PayrollStatus.FAILED);
-                payroll.setRemarks("Payment failed: " + e.getMessage());
-                payrollRepository.save(payroll);
-                failed++;
-            }
-        }
-
-        log.info("=== PAYMENT COMPLETED: Success={}, Failed={} ===", success, failed);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // CORE: Process single employee payment
-    // ─────────────────────────────────────────────────────────────────────────
-    @Transactional
-    public void processSinglePayment(Payroll payroll) {
-
-        // Mark as PROCESSING
-        payroll.setStatus(PayrollStatus.PROCESSING);
-        payrollRepository.save(payroll);
-
-        // ── Initiate Bank Transfer ────────────────────────────────────────────
-        // In production: replace with RazorpayX / Cashfree / HDFC / ICICI API
-        String transactionRef = initiateBankTransfer(
-                payroll.getEmployee(),
-                payroll.getNetSalary(),
-                payroll.getBankAccount(),
-                payroll.getIfscCode()
-        );
-
-        // Mark as PAID — amount deposited ✅
-        payroll.setStatus(PayrollStatus.PAID);
-        payroll.setPaymentDate(LocalDate.now());
-        payroll.setPaymentReference(transactionRef);
-        payroll.setPaymentMode("NEFT");
-        payrollRepository.save(payroll);
-
-        log.info("✅ SALARY PAID: Employee={} | Amount=₹{} | Ref={}",
-                payroll.getEmployee().getEmployeeId(),
-                payroll.getNetSalary(),
-                transactionRef);
-
-        // ── Send Payslip Email with PDF ───────────────────────────────────────
-        try {
-            emailService.sendPayslipEmail(payroll);   // @Async — non-blocking
-            payroll.setPayslipSent(true);
-            payrollRepository.save(payroll);
-        } catch (Exception e) {
-            log.warn("Payslip email failed for {} — payment still succeeded. Error: {}",
-                    payroll.getEmployee().getEmailId(), e.getMessage());
-        }
-    }
-
-    // GENERATE PAYROLL FOR ALL ACTIVE EMPLOYEES
     @Transactional
     public void generatePayrollForAllEmployees(LocalDate month) {
 
@@ -160,7 +64,8 @@ public class PayrollService {
                         PageRequest.of(0, Integer.MAX_VALUE, Sort.by("firstName")));
 
         List<Employee> activeEmployees = activePage.getContent();
-        log.info("Generating payroll for {} employees for month: {}", activeEmployees.size(), month);
+        log.info("Admin triggered payroll generation for {} employees | Month: {}",
+                activeEmployees.size(), month);
 
         for (Employee employee : activeEmployees) {
             try {
@@ -170,9 +75,13 @@ public class PayrollService {
                         employee.getEmployeeId(), e.getMessage());
             }
         }
+
+        log.info("Payroll generation completed for month: {}", month);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
     // GENERATE PAYROLL FOR A SINGLE EMPLOYEE
+    // ─────────────────────────────────────────────────────────────────────────
     @Transactional
     public Payroll generatePayrollForEmployee(Employee employee, LocalDate month) {
 
@@ -206,7 +115,7 @@ public class PayrollService {
 
         long absentDays = Math.max(workingDays - presentDays - leaveDays, 0);
 
-        // ── Build Payroll object
+        // ── Build Payroll object ──────────────────────────────────────────────
         Payroll payroll = new Payroll();
         payroll.setEmployee(employee);
         payroll.setPayrollMonth(month);
@@ -217,14 +126,21 @@ public class PayrollService {
         payroll.setBankAccount(employee.getAccountNo());
         payroll.setIfscCode(employee.getIfscCode());
         payroll.setStatus(PayrollStatus.PENDING);
-        payroll.setProcessedBy("SYSTEM");
+        payroll.setProcessedBy("ADMIN");
 
-        // ── Calculate all salary components 
+        // ── Calculate all salary components ──────────────────────────────────
         calculationService.calculate(employee, payroll);
+
+        log.info("Payroll generated for {} | Month: {} | Net: {}",
+                employee.getEmployeeId(), month, payroll.getNetSalary());
 
         return payrollRepository.save(payroll);
     }
-    // APPROVE PAYROLL — HR manually approves before payment
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2 — ADMIN APPROVES PAYROLL
+    // Triggered by: PUT /api/payroll/{id}/approve
+    // ─────────────────────────────────────────────────────────────────────────
     @Transactional
     public Payroll approvePayroll(Long payrollId, String approvedBy) {
         Payroll payroll = getPayrollById(payrollId);
@@ -236,9 +152,38 @@ public class PayrollService {
 
         payroll.setStatus(PayrollStatus.APPROVED);
         payroll.setApprovedBy(approvedBy);
+
+        log.info("Payroll approved | ID: {} | Employee: {} | ApprovedBy: {}",
+                payrollId, payroll.getEmployee().getEmployeeId(), approvedBy);
+
         return payrollRepository.save(payroll);
     }
-    // MANUAL PAYMENT — Admin triggers payment for a single payroll
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // APPROVE ALL PENDING PAYROLLS FOR A MONTH (Bulk Approve)
+    // Triggered by: PUT /api/payroll/approve-all?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    @Transactional
+    public int approveAllPendingPayrolls(LocalDate month, String approvedBy) {
+        List<Payroll> pendingPayrolls = payrollRepository
+                .findByPayrollMonthAndStatus(month, PayrollStatus.PENDING);
+
+        for (Payroll payroll : pendingPayrolls) {
+            payroll.setStatus(PayrollStatus.APPROVED);
+            payroll.setApprovedBy(approvedBy);
+            payrollRepository.save(payroll);
+        }
+
+        log.info("Bulk approved {} payrolls for month: {} | By: {}",
+                pendingPayrolls.size(), month, approvedBy);
+
+        return pendingPayrolls.size();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3 — ADMIN PROCESSES PAYMENT (Single)
+    // Triggered by: POST /api/payroll/{id}/process-payment
+    // ─────────────────────────────────────────────────────────────────────────
     @Transactional
     public Payroll manualProcessPayment(Long payrollId, String approvedBy) {
         Payroll payroll = getPayrollById(payrollId);
@@ -254,7 +199,83 @@ public class PayrollService {
         return payroll;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROCESS ALL APPROVED PAYROLLS FOR A MONTH (Bulk Pay)
+    // Triggered by: POST /api/payroll/process-all?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    @Transactional
+    public BulkPaymentResult processAllApprovedPayrolls(LocalDate month) {
+        List<Payroll> approvedPayrolls = payrollRepository
+                .findByPayrollMonthAndStatus(month, PayrollStatus.APPROVED);
+
+        int success = 0, failed = 0;
+
+        log.info("Admin triggered bulk payment for {} payrolls | Month: {}",
+                approvedPayrolls.size(), month);
+
+        for (Payroll payroll : approvedPayrolls) {
+            try {
+                processSinglePayment(payroll);
+                success++;
+            } catch (Exception e) {
+                log.error("Payment failed for {}: {}",
+                        payroll.getEmployee().getEmployeeId(), e.getMessage());
+                payroll.setStatus(PayrollStatus.FAILED);
+                payroll.setRemarks("Payment failed: " + e.getMessage());
+                payrollRepository.save(payroll);
+                failed++;
+            }
+        }
+
+        log.info("Bulk payment completed | Success: {} | Failed: {}", success, failed);
+        return new BulkPaymentResult(approvedPayrolls.size(), success, failed);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CORE: Process single employee payment
+    // ─────────────────────────────────────────────────────────────────────────
+    @Transactional
+    public void processSinglePayment(Payroll payroll) {
+
+        // Mark as PROCESSING
+        payroll.setStatus(PayrollStatus.PROCESSING);
+        payrollRepository.save(payroll);
+
+        // ── Initiate Bank Transfer ────────────────────────────────────────────
+        // In production: replace with RazorpayX / Cashfree / HDFC / ICICI API
+        String transactionRef = initiateBankTransfer(
+                payroll.getEmployee(),
+                payroll.getNetSalary(),
+                payroll.getBankAccount(),
+                payroll.getIfscCode()
+        );
+
+        // ── Mark as PAID ──────────────────────────────────────────────────────
+        payroll.setStatus(PayrollStatus.PAID);
+        payroll.setPaymentDate(LocalDate.now());
+        payroll.setPaymentReference(transactionRef);
+        payroll.setPaymentMode("NEFT");
+        payrollRepository.save(payroll);
+
+        log.info("Salary paid | Employee: {} | Amount: {} | Ref: {}",
+                payroll.getEmployee().getEmployeeId(),
+                payroll.getNetSalary(),
+                transactionRef);
+
+        // ── Send Payslip Email with PDF (@Async — non-blocking) ──────────────
+        try {
+            emailService.sendPayslipEmail(payroll);
+            payroll.setPayslipSent(true);
+            payrollRepository.save(payroll);
+        } catch (Exception e) {
+            log.warn("Payslip email failed for {} - payment still succeeded. Error: {}",
+                    payroll.getEmployee().getEmailId(), e.getMessage());
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PUT ON HOLD
+    // ─────────────────────────────────────────────────────────────────────────
     @Transactional
     public Payroll holdPayroll(Long payrollId, String reason) {
         Payroll payroll = getPayrollById(payrollId);
@@ -265,10 +286,14 @@ public class PayrollService {
 
         payroll.setStatus(PayrollStatus.ON_HOLD);
         payroll.setRemarks(reason);
+
+        log.info("Payroll put on hold | ID: {} | Reason: {}", payrollId, reason);
         return payrollRepository.save(payroll);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
     // RETRY FAILED PAYMENT
+    // ─────────────────────────────────────────────────────────────────────────
     @Transactional
     public Payroll retryFailedPayment(Long payrollId) {
         Payroll payroll = getPayrollById(payrollId);
@@ -281,64 +306,55 @@ public class PayrollService {
         payroll.setRemarks(null);
         payrollRepository.save(payroll);
 
+        log.info("Retrying failed payment | ID: {}", payrollId);
         processSinglePayment(payroll);
         return payroll;
     }
 
-   
-    // GET PAYROLL BY ID
+    // ─────────────────────────────────────────────────────────────────────────
+    // QUERY METHODS
+    // ─────────────────────────────────────────────────────────────────────────
+
     public Payroll getPayrollById(Long payrollId) {
         return payrollRepository.findById(payrollId)
                 .orElseThrow(() -> new RuntimeException("Payroll not found with id: " + payrollId));
     }
 
-    // GET EMPLOYEE PAYROLL HISTORY
     public List<Payroll> getEmployeePayrollHistory(Long employeeId) {
         return payrollRepository.findByEmployeeId(employeeId);
     }
 
-    // GET PAYROLL BY MONTH
     public Page<Payroll> getPayrollByMonth(LocalDate month, int page, int size) {
         return payrollRepository.findByPayrollMonth(
                 month, PageRequest.of(page, size, Sort.by("employee.firstName")));
     }
 
-    // GET SPECIFIC EMPLOYEE + MONTH PAYROLL
     public Optional<Payroll> getPayroll(Long employeeId, LocalDate month) {
         return payrollRepository.findByEmployeeIdAndPayrollMonth(employeeId, month);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BANK TRANSFER — Replace body with real bank API in production
+    // BANK TRANSFER — Replace with real bank API in production
     // ─────────────────────────────────────────────────────────────────────────
     private String initiateBankTransfer(Employee employee, BigDecimal amount,
                                          String accountNo, String ifscCode) {
-        // ══════════════════════════════════════════════════════════════════════
-        // PRODUCTION: Replace with actual bank API
-        //
-        // RazorpayX example:
-        //   POST https://api.razorpay.com/v1/payouts
-        //   Body: { fund_account_id, amount (paise), mode: "NEFT", purpose: "salary" }
-        //
-        // Cashfree Payouts example:
-        //   POST https://payout-api.cashfree.com/payout/v1/requestTransfer
-        //
-        // Response will contain real transaction reference ID
-        // ══════════════════════════════════════════════════════════════════════
-
-        log.info("BANK TRANSFER → Employee: {} | Account: {} | Amount: ₹{} | IFSC: {}",
+        log.info("Bank transfer initiated | Employee: {} | Account: {} | Amount: {} | IFSC: {}",
                 employee.getEmployeeId(), maskAccount(accountNo), amount, ifscCode);
 
-        // Simulate transaction reference
+        // Simulated transaction reference
+        // PRODUCTION: Replace with RazorpayX / Cashfree / HDFC / ICICI API call
         return "TXN" + UUID.randomUUID().toString()
                            .replace("-", "")
                            .substring(0, 12)
                            .toUpperCase();
     }
 
-    // HELPERS
+    public record BulkPaymentResult(int total, int success, int failed) {}
 
-    // Count working days (Mon–Sat, skip Sundays)
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPERS
+ 
+    // Count working days (Mon-Sat, skip Sundays)
     private int calculateWorkingDays(LocalDate start, LocalDate end) {
         int count = 0;
         LocalDate date = start;

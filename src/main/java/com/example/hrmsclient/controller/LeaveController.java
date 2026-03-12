@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.*;
 public class LeaveController {
 
     private final LeaveService leaveService;
+    
+    public LeaveController(LeaveService leaveService) {
+    	this.leaveService=leaveService;
+    }
 
     @PostMapping("/apply")
     public ResponseEntity<ApiResponse<LeaveResponseDTO>> apply(

@@ -38,4 +38,21 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
     Long sumApprovedLeaveDaysForMonth(@Param("empId") Long empId,
                                       @Param("year") int year,
                                       @Param("month") int month);
+
+ // For CalendarService - employee calendar
+ @Query("SELECT l FROM LeaveRequest l WHERE l.employee.id = :empId " +
+        "AND l.status IN ('APPROVED','PENDING') " +
+        "AND l.startDate <= :end AND l.endDate >= :start")
+ List<LeaveRequest> findByEmployeeIdAndDateRange(
+         @Param("empId") Long empId,
+         @Param("start") LocalDate start,
+         @Param("end") LocalDate end);
+
+ // For CalendarService - admin calendar (all employees)
+ @Query("SELECT l FROM LeaveRequest l WHERE " +
+        "l.startDate <= :end AND l.endDate >= :start " +
+        "ORDER BY l.startDate")
+ List<LeaveRequest> findAllByDateRange(
+         @Param("start") LocalDate start,
+         @Param("end") LocalDate end);
 }

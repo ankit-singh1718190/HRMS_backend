@@ -35,7 +35,7 @@ import java.util.List;
 
 @Entity
 @Table(
-    name = "hrms_employees",
+    name = "employees",
     indexes = {
         @Index(name = "idx_emp_id",     columnList = "employeeId",       unique = true),
         @Index(name = "idx_email",       columnList = "emailId"),
@@ -48,8 +48,8 @@ import java.util.List;
 public class Employee {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "employee_seq")
-    @SequenceGenerator(name = "employee_seq", sequenceName = "employee_seq", allocationSize = 10)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+
     private Long id;
 
     @Column(unique = true, nullable = false, length = 20)

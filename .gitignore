@@ -38,3 +38,5 @@ application-local.properties
 .env
 .env.*
 !.env.example
+
+application-prod.properties

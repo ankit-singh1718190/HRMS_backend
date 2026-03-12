@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.time.Duration;
 
 @Entity
-@Table(name = "hrms_attendance",
+@Table(name = "attendance",
     indexes = {
         @Index(name = "idx_att_emp",      columnList = "employee_id"),
         @Index(name = "idx_att_date",     columnList = "attendanceDate"),
@@ -22,8 +22,7 @@ import java.time.Duration;
 public class Attendance {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "att_seq")
-    @SequenceGenerator(name = "att_seq", sequenceName = "att_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

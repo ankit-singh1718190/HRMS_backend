@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "hrms_payroll",
+@Table(name = "payroll",
     indexes = {
         @Index(name = "idx_payroll_emp",    columnList = "employee_id"),
         @Index(name = "idx_payroll_month",  columnList = "payroll_month"),
@@ -23,8 +23,7 @@ import java.time.LocalDateTime;
 public class Payroll {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "payroll_seq")
-    @SequenceGenerator(name = "payroll_seq", sequenceName = "payroll_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

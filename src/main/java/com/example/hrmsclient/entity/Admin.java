@@ -9,7 +9,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "hrms_admin",
+@Table(name = "admin",
     indexes = {
         @Index(name = "idx_admin_email", columnList = "emailId", unique = true),
         @Index(name = "idx_admin_id",    columnList = "adminId", unique = true)
@@ -18,10 +18,9 @@ import java.time.LocalDateTime;
 @EntityListeners(AuditingEntityListener.class)
 public class Admin {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "admin_seq")
-    @SequenceGenerator(name = "admin_seq", sequenceName = "admin_seq", allocationSize = 1)
-    private Long id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
 
     @Column(name = "admin_id", unique = true, nullable = false, length = 20)
     private String adminId;            // ADM001

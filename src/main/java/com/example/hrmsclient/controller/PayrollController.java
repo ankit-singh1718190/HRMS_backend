@@ -14,9 +14,23 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * PayrollController
+ * ─────────────────────────────────────────────────────────────────────────────
+ * All endpoints are ADMIN/HR triggered manually.
+ * No auto-scheduling — admin has full control over payroll flow.
+ *
+ * Manual Flow:
+ *   STEP 1 → POST /api/payroll/generate?month=2025-03-01        Generate all
+ *   STEP 2 → PUT  /api/payroll/{id}/approve                     Approve one
+ *          → PUT  /api/payroll/approve-all?month=2025-03-01     Approve all
+ *   STEP 3 → POST /api/payroll/{id}/process-payment             Pay one
+ *          → POST /api/payroll/process-all?month=2025-03-01     Pay all
+ */
 @RestController
 @RequestMapping("/api/payroll")
 public class PayrollController {
@@ -30,8 +44,10 @@ public class PayrollController {
         this.payrollRepository = payrollRepository;
     }
 
-    // ── GENERATE — Admin/HR manually triggers payroll generation ─────────────
-    // POST /api/payroll/generate?month=2024-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 1 — GENERATE
+    // POST /api/payroll/generate?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
     @PostMapping("/generate")
     public ResponseEntity<?> generatePayroll(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
@@ -43,7 +59,11 @@ public class PayrollController {
             "message", "Payroll generated for " + month.getMonth() + " " + month.getYear()
         ));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2A — APPROVE SINGLE
     // PUT /api/payroll/{id}/approve
+    // ─────────────────────────────────────────────────────────────────────────
     @PutMapping("/{id}/approve")
     public ResponseEntity<?> approvePayroll(
             @PathVariable Long id,
@@ -56,7 +76,29 @@ public class PayrollController {
             "data",    buildPayrollSummary(payroll)
         ));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2B — APPROVE ALL PENDING FOR A MONTH (Bulk)
+    // PUT /api/payroll/approve-all?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    @PutMapping("/approve-all")
+    public ResponseEntity<?> approveAll(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        int count = payrollService.approveAllPendingPayrolls(month, userDetails.getUsername());
+        return ResponseEntity.ok(Map.of(
+            "status",  "success",
+            "message", "Bulk approved " + count + " payrolls for "
+                        + month.getMonth() + " " + month.getYear(),
+            "approved", count
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3A — PROCESS PAYMENT (Single)
     // POST /api/payroll/{id}/process-payment
+    // ─────────────────────────────────────────────────────────────────────────
     @PostMapping("/{id}/process-payment")
     public ResponseEntity<?> processPayment(
             @PathVariable Long id,
@@ -65,11 +107,66 @@ public class PayrollController {
         Payroll payroll = payrollService.manualProcessPayment(id, userDetails.getUsername());
         return ResponseEntity.ok(Map.of(
             "status",  "success",
-            "message", "✅ Salary of ₹" + payroll.getNetSalary() + " transferred successfully",
+            "message", "Salary of Rs." + payroll.getNetSalary() + " transferred successfully",
             "data",    buildPayrollSummary(payroll)
         ));
     }
-    // GET /api/payroll/month?month=2024-03-01
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3B — PROCESS ALL APPROVED PAYMENTS FOR A MONTH (Bulk Pay)
+    // POST /api/payroll/process-all?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    @PostMapping("/process-all")
+    public ResponseEntity<?> processAll(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
+
+        PayrollService.BulkPaymentResult result =
+                payrollService.processAllApprovedPayrolls(month);
+
+        return ResponseEntity.ok(Map.of(
+            "status",  "success",
+            "message", "Bulk payment completed for " + month.getMonth() + " " + month.getYear(),
+            "total",   result.total(),
+            "success", result.success(),
+            "failed",  result.failed()
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PUT ON HOLD
+    // PUT /api/payroll/{id}/hold
+    // ─────────────────────────────────────────────────────────────────────────
+    @PutMapping("/{id}/hold")
+    public ResponseEntity<?> holdPayroll(
+            @PathVariable Long id,
+            @RequestParam String reason) {
+
+        Payroll payroll = payrollService.holdPayroll(id, reason);
+        return ResponseEntity.ok(Map.of(
+            "status",  "success",
+            "message", "Payroll put on hold",
+            "data",    buildPayrollSummary(payroll)
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // RETRY FAILED PAYMENT
+    // POST /api/payroll/{id}/retry
+    // ─────────────────────────────────────────────────────────────────────────
+    @PostMapping("/{id}/retry")
+    public ResponseEntity<?> retryPayment(@PathVariable Long id) {
+        Payroll payroll = payrollService.retryFailedPayment(id);
+        return ResponseEntity.ok(Map.of(
+            "status",  "success",
+            "message", "Payment retried successfully",
+            "data",    buildPayrollSummary(payroll)
+        ));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET PAYROLL BY MONTH
+    // GET /api/payroll/month?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
     @GetMapping("/month")
     public ResponseEntity<?> getPayrollByMonth(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
@@ -80,13 +177,17 @@ public class PayrollController {
         Page<Payroll> payrolls  = payrollRepository.findByPayrollMonth(month, pageRequest);
 
         return ResponseEntity.ok(Map.of(
-            "status", "success",
-            "data",   payrolls.getContent().stream().map(this::buildPayrollSummary).toList(),
+            "status",       "success",
+            "data",         payrolls.getContent().stream().map(this::buildPayrollSummary).toList(),
             "totalRecords", payrolls.getTotalElements(),
             "totalPages",   payrolls.getTotalPages()
         ));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET EMPLOYEE PAYROLL HISTORY
     // GET /api/payroll/employee/{employeeId}
+    // ─────────────────────────────────────────────────────────────────────────
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<?> getEmployeePayrollHistory(
             @PathVariable Long employeeId) {
@@ -97,18 +198,11 @@ public class PayrollController {
             "data",   payrolls.stream().map(this::buildPayrollSummary).toList()
         ));
     }
-    // GET /api/payroll/my-payslips
-    @GetMapping("/my-payslips")
-    public ResponseEntity<?> getMyPayslips(
-            @AuthenticationPrincipal UserDetails userDetails) {
 
-        // Employee can only see own payslips — identified by JWT email
-        return ResponseEntity.ok(Map.of(
-            "status",  "success",
-            "message", "Use /api/payroll/employee/{your-employee-id}"
-        ));
-    }
-    // GET /api/payroll/summary?month=2024-03-01
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET PAYROLL SUMMARY FOR A MONTH
+    // GET /api/payroll/summary?month=2025-03-01
+    // ─────────────────────────────────────────────────────────────────────────
     @GetMapping("/summary")
     public ResponseEntity<?> getPayrollSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
@@ -116,31 +210,35 @@ public class PayrollController {
         return ResponseEntity.ok(Map.of(
             "status", "success",
             "data", Map.of(
-                "month",       month.getMonth() + " " + month.getYear(),
-                "totalPaid",   payrollRepository.countByMonthAndStatus(month, PayrollStatus.PAID),
-                "totalPending",payrollRepository.countByMonthAndStatus(month, PayrollStatus.PENDING),
-                "totalAmount", payrollRepository.getTotalNetSalaryByMonth(month) != null
-                               ? payrollRepository.getTotalNetSalaryByMonth(month) : 0
+                "month",        month.getMonth() + " " + month.getYear(),
+                "totalPaid",    payrollRepository.countByMonthAndStatus(month, PayrollStatus.PAID),
+                "totalPending", payrollRepository.countByMonthAndStatus(month, PayrollStatus.PENDING),
+                "totalApproved",payrollRepository.countByMonthAndStatus(month, PayrollStatus.APPROVED),
+                "totalFailed",  payrollRepository.countByMonthAndStatus(month, PayrollStatus.FAILED),
+                "totalAmount",  payrollRepository.getTotalNetSalaryByMonth(month) != null
+                                ? payrollRepository.getTotalNetSalaryByMonth(month) : 0
             )
         ));
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIVATE HELPER
+    // ─────────────────────────────────────────────────────────────────────────
     private Map<String, Object> buildPayrollSummary(Payroll p) {
-        return Map.ofEntries(
-            Map.entry("payrollId",       p.getId()),
-            Map.entry("employeeId",      p.getEmployee().getEmployeeId()),
-            Map.entry("employeeName",    p.getEmployee().getFullName()),
-            Map.entry("month",           p.getPayrollMonth().toString()),
-            Map.entry("basicSalary",     p.getBasicSalary()),
-            Map.entry("grossSalary",     p.getGrossSalary()),
-            Map.entry("totalDeductions", p.getTotalDeductions()),
-            Map.entry("netSalary",       p.getNetSalary()),
-            Map.entry("status",          p.getStatus().toString()),
-            Map.entry("paymentDate",     p.getPaymentDate() != null
-                                            ? p.getPaymentDate().toString()
-                                            : "Not Paid"),
-            Map.entry("paymentRef",      p.getPaymentReference() != null
-                                            ? p.getPaymentReference()
-                                            : "N/A")
-        );
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("payrollId",       p.getId());
+        map.put("employeeId",      p.getEmployee().getEmployeeId());
+        map.put("employeeName",    p.getEmployee().getFullName());
+        map.put("month",           p.getPayrollMonth().toString());
+        map.put("basicSalary",     p.getBasicSalary());
+        map.put("grossSalary",     p.getGrossSalary());
+        map.put("totalDeductions", p.getTotalDeductions());
+        map.put("netSalary",       p.getNetSalary());
+        map.put("status",          p.getStatus().toString());
+        map.put("paymentDate",     p.getPaymentDate() != null
+                                        ? p.getPaymentDate().toString() : "Not Paid");
+        map.put("paymentRef",      p.getPaymentReference() != null
+                                        ? p.getPaymentReference() : "N/A");
+        return map;
     }
 }

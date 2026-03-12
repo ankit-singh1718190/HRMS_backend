@@ -78,6 +78,11 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     		AND DATE(a.checkIn) = :date
     		""")
     Attendance findByEmployeeAndDate(Long employeeId, LocalDate date);
-//    List<Attendance> findByDateAndCheckOutTimeIsNotNull(LocalDate date);
-//    List<Attendance> findByDateAndCheckInTimeIsNotNull(LocalDate date);
+    
+    @Query("SELECT a FROM Attendance a WHERE a.attendanceDate = :date AND a.checkOut IS NOT NULL")
+    List<Attendance> findByAttendanceDateAndCheckOutIsNotNull(@Param("date") LocalDate date);
+
+    @Query("SELECT a FROM Attendance a WHERE a.attendanceDate = :date AND a.checkIn IS NOT NULL")
+    List<Attendance> findByAttendanceDateAndCheckInIsNotNull(@Param("date") LocalDate date);
+    
 }

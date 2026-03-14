@@ -1,16 +1,15 @@
 package com.example.hrmsclient.dto;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Past;
-import jakarta.validation.constraints.PastOrPresent;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import com.example.hrmsclient.entity.EmployeeType;
+import jakarta.validation.constraints.*;
 
 import java.time.LocalDate;
 
 public class EmployeeRequestDTO {
+
+    @NotBlank(message = "Employee ID is required")
+    @Size(max = 20)
+    private String employeeId;
 
     @Size(max = 10)
     private String prefix;
@@ -42,6 +41,9 @@ public class EmployeeRequestDTO {
     @PastOrPresent
     private LocalDate joiningDate;
 
+    /** NEW: Exit date — set when employee leaves the organisation */
+    private LocalDate exitDate;
+
     private String houseNo;
     private String city;
     private String state;
@@ -63,11 +65,21 @@ public class EmployeeRequestDTO {
     private String previousCtc;
     private String higherQualification;
 
-    @Min(0)
-    private Long basicEmployeeSalary;
-
     @NotBlank(message = "Role is required")
     private String role;
+
+    /**
+     * NEW: Employee type — drives leave entitlements and payroll rules.
+     * Allowed values: FULL_TIME | CONTRACT | TEMPORARY | INTERN
+     */
+    @NotNull(message = "Employee type is required")
+    private EmployeeType employeeType;
+
+    /**
+     * NEW: Reporting manager's employeeId (e.g. "EMP005").
+     * Used for manager-level leave approval.
+     */
+    private String reportingManager;
 
     private String bankName;
     private String accountNo;
@@ -83,69 +95,77 @@ public class EmployeeRequestDTO {
 
     public EmployeeRequestDTO() {}
 
-    public String getPrefix()               { return prefix;               }
-    public String getFirstName()            { return firstName;            }
-    public String getLastName()             { return lastName;             }
-    public String getEmailId()              { return emailId;              }
-    public String getContactNumber1()       { return contactNumber1;       }
-    public String getGender()               { return gender;               }
-    public LocalDate getDateOfBirth()       { return dateOfBirth;          }
-    public String getNationality()          { return nationality;          }
-    public String getWorkEmail()            { return workEmail;            }
-    public LocalDate getJoiningDate()       { return joiningDate;          }
-    public String getHouseNo()              { return houseNo;              }
-    public String getCity()                 { return city;                 }
-    public String getState()               { return state;                }
-    public String getPanNumber()            { return panNumber;            }
-    public String getAadharNumber()         { return aadharNumber;         }
-    public String getPassportNumber()       { return passportNumber;       }
-    public String getFatherName()           { return fatherName;           }
-    public String getMotherName()           { return motherName;           }
-    public String getMaritalStatus()        { return maritalStatus;        }
-    public String getPreviousCompanyName()  { return previousCompanyName;  }
-    public String getPreviousExperience()   { return previousExperience;   }
-    public String getDepartment()           { return department;           }
-    public String getDesignation()          { return designation;          }
-    public String getPreviousCtc()          { return previousCtc;          }
-    public String getHigherQualification()  { return higherQualification;  }
-    public Long getBasicEmployeeSalary()    { return basicEmployeeSalary;  }
-    public String getRole()                 { return role;                 }
-    public String getBankName()             { return bankName;             }
-    public String getAccountNo()            { return accountNo;            }
-    public String getIfscCode()             { return ifscCode;             }
-    public String getBankBranch()           { return bankBranch;           }
-    public String getPassword()             { return password;             }
-    
-    public void setPrefix(String prefix)                          { this.prefix              = prefix;              }
-    public void setFirstName(String firstName)                    { this.firstName           = firstName;           }
-    public void setLastName(String lastName)                      { this.lastName            = lastName;            }
-    public void setEmailId(String emailId)                        { this.emailId             = emailId;             }
-    public void setContactNumber1(String contactNumber1)          { this.contactNumber1      = contactNumber1;      }
-    public void setGender(String gender)                          { this.gender              = gender;              }
-    public void setDateOfBirth(LocalDate dateOfBirth)             { this.dateOfBirth         = dateOfBirth;         }
-    public void setNationality(String nationality)                { this.nationality         = nationality;         }
-    public void setWorkEmail(String workEmail)                    { this.workEmail           = workEmail;           }
-    public void setJoiningDate(LocalDate joiningDate)             { this.joiningDate         = joiningDate;         }
-    public void setHouseNo(String houseNo)                        { this.houseNo             = houseNo;             }
-    public void setCity(String city)                              { this.city                = city;                }
-    public void setState(String state)                            { this.state               = state;               }
-    public void setPanNumber(String panNumber)                    { this.panNumber           = panNumber;           }
-    public void setAadharNumber(String aadharNumber)              { this.aadharNumber        = aadharNumber;        }
-    public void setPassportNumber(String passportNumber)          { this.passportNumber      = passportNumber;      }
-    public void setFatherName(String fatherName)                  { this.fatherName          = fatherName;          }
-    public void setMotherName(String motherName)                  { this.motherName          = motherName;          }
-    public void setMaritalStatus(String maritalStatus)            { this.maritalStatus       = maritalStatus;       }
-    public void setPreviousCompanyName(String previousCompanyName){ this.previousCompanyName = previousCompanyName; }
-    public void setPreviousExperience(String previousExperience)  { this.previousExperience  = previousExperience;  }
-    public void setDepartment(String department)                  { this.department          = department;          }
-    public void setDesignation(String designation)                { this.designation         = designation;         }
-    public void setPreviousCtc(String previousCtc)                { this.previousCtc         = previousCtc;         }
-    public void setHigherQualification(String hq)                 { this.higherQualification = hq;                  }
-    public void setBasicEmployeeSalary(Long basicEmployeeSalary)  { this.basicEmployeeSalary = basicEmployeeSalary; }
-    public void setRole(String role)                              { this.role                = role;                }
-    public void setBankName(String bankName)                      { this.bankName            = bankName;            }
-    public void setAccountNo(String accountNo)                    { this.accountNo           = accountNo;           }
-    public void setIfscCode(String ifscCode)                      { this.ifscCode            = ifscCode;            }
-    public void setBankBranch(String bankBranch)                  { this.bankBranch          = bankBranch;          }
-    public void setPassword(String password)                      { this.password            = password;            }
+    // ── Getters 
+    public String getEmployeeId()           { return employeeId; }
+    public String getPrefix()               { return prefix; }
+    public String getFirstName()            { return firstName; }
+    public String getLastName()             { return lastName; }
+    public String getEmailId()              { return emailId; }
+    public String getContactNumber1()       { return contactNumber1; }
+    public String getGender()               { return gender; }
+    public LocalDate getDateOfBirth()       { return dateOfBirth; }
+    public String getNationality()          { return nationality; }
+    public String getWorkEmail()            { return workEmail; }
+    public LocalDate getJoiningDate()       { return joiningDate; }
+    public LocalDate getExitDate()          { return exitDate; }
+    public String getHouseNo()              { return houseNo; }
+    public String getCity()                 { return city; }
+    public String getState()                { return state; }
+    public String getPanNumber()            { return panNumber; }
+    public String getAadharNumber()         { return aadharNumber; }
+    public String getPassportNumber()       { return passportNumber; }
+    public String getFatherName()           { return fatherName; }
+    public String getMotherName()           { return motherName; }
+    public String getMaritalStatus()        { return maritalStatus; }
+    public String getPreviousCompanyName()  { return previousCompanyName; }
+    public String getPreviousExperience()   { return previousExperience; }
+    public String getDepartment()           { return department; }
+    public String getDesignation()          { return designation; }
+    public String getPreviousCtc()          { return previousCtc; }
+    public String getHigherQualification()  { return higherQualification; }
+    public String getRole()                 { return role; }
+    public EmployeeType getEmployeeType()   { return employeeType; }
+    public String getReportingManager()     { return reportingManager; }
+    public String getBankName()             { return bankName; }
+    public String getAccountNo()            { return accountNo; }
+    public String getIfscCode()             { return ifscCode; }
+    public String getBankBranch()           { return bankBranch; }
+    public String getPassword()             { return password; }
+
+    // ── Setters
+    public void setEmployeeId(String employeeId)                  { this.employeeId          = employeeId; }
+    public void setPrefix(String prefix)                          { this.prefix              = prefix; }
+    public void setFirstName(String firstName)                    { this.firstName           = firstName; }
+    public void setLastName(String lastName)                      { this.lastName            = lastName; }
+    public void setEmailId(String emailId)                        { this.emailId             = emailId; }
+    public void setContactNumber1(String v)                       { this.contactNumber1      = v; }
+    public void setGender(String gender)                          { this.gender              = gender; }
+    public void setDateOfBirth(LocalDate dateOfBirth)             { this.dateOfBirth         = dateOfBirth; }
+    public void setNationality(String nationality)                { this.nationality         = nationality; }
+    public void setWorkEmail(String workEmail)                    { this.workEmail           = workEmail; }
+    public void setJoiningDate(LocalDate joiningDate)             { this.joiningDate         = joiningDate; }
+    public void setExitDate(LocalDate exitDate)                   { this.exitDate            = exitDate; }
+    public void setHouseNo(String houseNo)                        { this.houseNo             = houseNo; }
+    public void setCity(String city)                              { this.city                = city; }
+    public void setState(String state)                            { this.state               = state; }
+    public void setPanNumber(String v)                            { this.panNumber           = v; }
+    public void setAadharNumber(String v)                         { this.aadharNumber        = v; }
+    public void setPassportNumber(String v)                       { this.passportNumber      = v; }
+    public void setFatherName(String v)                           { this.fatherName          = v; }
+    public void setMotherName(String v)                           { this.motherName          = v; }
+    public void setMaritalStatus(String v)                        { this.maritalStatus       = v; }
+    public void setPreviousCompanyName(String v)                  { this.previousCompanyName = v; }
+    public void setPreviousExperience(String v)                   { this.previousExperience  = v; }
+    public void setDepartment(String department)                  { this.department          = department; }
+    public void setDesignation(String designation)                { this.designation         = designation; }
+    public void setPreviousCtc(String v)                          { this.previousCtc         = v; }
+    public void setHigherQualification(String v)                  { this.higherQualification = v; }
+    public void setRole(String role)                              { this.role                = role; }
+    public void setEmployeeType(EmployeeType employeeType)        { this.employeeType        = employeeType; }
+    public void setReportingManager(String reportingManager)      { this.reportingManager    = reportingManager; }
+    public void setBankName(String bankName)                      { this.bankName            = bankName; }
+    public void setAccountNo(String accountNo)                    { this.accountNo           = accountNo; }
+    public void setIfscCode(String ifscCode)                      { this.ifscCode            = ifscCode; }
+    public void setBankBranch(String bankBranch)                  { this.bankBranch          = bankBranch; }
+    public void setPassword(String password)                      { this.password            = password; }
 }

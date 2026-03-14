@@ -1,57 +1,86 @@
 package com.example.hrmsclient.service;
 
+import com.example.hrmsclient.dto.AttendanceResponseDTO;
 import com.example.hrmsclient.dto.DashboardFilterRequest;
 import com.example.hrmsclient.entity.*;
 import com.example.hrmsclient.repository.*;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;                       
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.*;
 
+/**
+ * UPDATED DashboardService
+ *
+ * Changes vs original:
+ *   1. getOverviewStats: now includes presentToday (was missing/not working).
+ *      Uses attendanceRepository.countByAttendanceDateAndStatus for today.
+ *
+ *   2. Removed pendingLeaves from admin overview stats (per requirements:
+ *      "Need to remove Pending Leaves from admin dashboard").
+ *
+ *   3. Added managerPendingLeaveCount in getOverviewStats —
+ *      "Manager Pending Leave Approval" tile on dashboard.
+ */
 @Service
 public class DashboardService {
 
-    private final EmployeeRepository   employeeRepository;
-    private final AttendanceRepository attendanceRepository;
-    private final PayrollRepository    payrollRepository;
+    private final EmployeeRepository    employeeRepository;
+    private final AttendanceRepository  attendanceRepository;
+    private final PayrollRepository     payrollRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
 
     public DashboardService(EmployeeRepository employeeRepository,
                              AttendanceRepository attendanceRepository,
-                             PayrollRepository payrollRepository) {
-        this.employeeRepository   = employeeRepository;
-        this.attendanceRepository = attendanceRepository;
-        this.payrollRepository    = payrollRepository;
+                             PayrollRepository payrollRepository,
+                             LeaveRequestRepository leaveRequestRepository) {
+        this.employeeRepository    = employeeRepository;
+        this.attendanceRepository  = attendanceRepository;
+        this.payrollRepository     = payrollRepository;
+        this.leaveRequestRepository = leaveRequestRepository;
     }
 
-    // ── 1. Overview Stats (ADMIN + HR + MANAGER) ──────────────────────────────
+
     public Map<String, Object> getOverviewStats() {
-        LocalDate today      = LocalDate.now();
+        LocalDate today = LocalDate.now();
+
         long totalEmployees  = employeeRepository.countByDeletedFalse();
         long activeEmployees = employeeRepository
-                .countByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE);
-        long presentToday    = attendanceRepository
-                .countByAttendanceDateAndStatus(today, AttendanceStatus.PRESENT);
-        long onLeaveToday    = attendanceRepository
-                .countByAttendanceDateAndStatus(today, AttendanceStatus.ON_LEAVE);
-        long absentToday     = Math.max(activeEmployees - presentToday - onLeaveToday, 0);
+            .countByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE);
+
+        // FIX: presentToday — count PRESENT + WFH records for today
+        long presentToday = attendanceRepository
+            .countByAttendanceDateAndStatus(today, AttendanceStatus.PRESENT)
+            + attendanceRepository
+            .countByAttendanceDateAndStatus(today, AttendanceStatus.WORK_FROM_HOME);
+
+        // leaveToday — employees on approved leave today
+        long leaveToday = attendanceRepository
+            .countByAttendanceDateAndStatus(today, AttendanceStatus.ON_LEAVE);
+
+        // notPresentToday = active - present - onLeave
+        long notPresentToday = Math.max(activeEmployees - presentToday - leaveToday, 0);
+
+        // managerPendingLeaveCount — total pending leaves where employee has a reporting manager
+        long managerPendingLeaveCount = leaveRequestRepository
+            .countPendingLeavesWithReportingManager();
 
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("totalEmployees",  totalEmployees);
-        stats.put("activeEmployees", activeEmployees);
-        stats.put("presentToday",    presentToday);
-        stats.put("onLeaveToday",    onLeaveToday);
-        stats.put("absentToday",     absentToday);
-        stats.put("attendanceRate",  activeEmployees > 0
-                ? Math.round((presentToday * 100.0) / activeEmployees) + "%" : "0%");
+        stats.put("totalEmployees",          totalEmployees);
+        stats.put("activeEmployees",         activeEmployees);
+        stats.put("presentToday",            presentToday);       // FIX: was missing
+        stats.put("notPresentToday",         notPresentToday);
+        stats.put("leaveToday",              leaveToday);
+        // pendingLeaves REMOVED from admin dashboard per requirements
+        stats.put("managerPendingLeaveCount",managerPendingLeaveCount); // NEW
         return stats;
     }
 
-    // ── 2. Employees with filters ─────────────────────────────────────────────
+    // ── Employees with Filters
     public Page<Employee> getFilteredEmployees(DashboardFilterRequest f) {
         Pageable pg = pageable(f);
-
         if (hasValue(f.getSearch()))           return employeeRepository.searchEmployees(f.getSearch(), pg);
         if (hasValue(f.getEmployeeId()))       return employeeRepository.searchEmployees(f.getEmployeeId(), pg);
         if (hasValue(f.getFirstName()))        return employeeRepository.searchEmployees(f.getFirstName(), pg);
@@ -64,64 +93,61 @@ public class DashboardService {
         return employeeRepository.findByDeletedFalse(pg);
     }
 
-   
+    // ── Attendance with Filters 
+    @Transactional(readOnly = true)
+    public Page<AttendanceResponseDTO> getFilteredAttendance(DashboardFilterRequest f) {
+        Pageable pg   = pageable(f);
+        LocalDate date = f.getAttendanceDate() != null ? f.getAttendanceDate() : LocalDate.now();
 
- // ── 3. Attendance with filters ────────────────────────────────────────────
- @Transactional(readOnly = true)
- public Page<com.example.hrmsclient.dto.AttendanceResponseDTO> getFilteredAttendance(DashboardFilterRequest f) {
-
-     Pageable  pg   = pageable(f);
-     LocalDate date = f.getAttendanceDate() != null ? f.getAttendanceDate() : LocalDate.now();
-
-     Page<Attendance> attendancePage;
-
-     if (f.getAttendanceDateFrom() != null && f.getAttendanceDateTo() != null) {
-         attendancePage = attendanceRepository.findByAttendanceDateBetween(
-                 f.getAttendanceDateFrom(), f.getAttendanceDateTo(), pg);
-     }
-     else if (hasValue(f.getAttendanceStatus())) {
-         AttendanceStatus s = AttendanceStatus.valueOf(f.getAttendanceStatus().toUpperCase());
-         attendancePage = attendanceRepository.findByStatusAndAttendanceDate(s, date, pg);
-     }
-     else {
-         attendancePage = attendanceRepository.findByAttendanceDate(date, pg);
-     }
-
-     return attendancePage.map(com.example.hrmsclient.dto.AttendanceResponseDTO::from);
- }
-
-    // ── 4. Payroll with filters ───────────────────────────────────────────────
-    public Page<Payroll> getFilteredPayroll(DashboardFilterRequest f) {
-        Pageable  pg    = pageable(f);
-        LocalDate month = f.getPayrollMonth() != null
-                ? f.getPayrollMonth().withDayOfMonth(1)
-                : LocalDate.now().withDayOfMonth(1);
-
-        if (hasValue(f.getPayrollStatus())) {
-            PayrollStatus s = PayrollStatus.valueOf(f.getPayrollStatus().toUpperCase());
-            return payrollRepository.findByPayrollMonthAndStatus(month, s, pg);
+        Page<Attendance> attendancePage;
+        if (f.getAttendanceDateFrom() != null && f.getAttendanceDateTo() != null) {
+            attendancePage = attendanceRepository.findByAttendanceDateBetween(
+                f.getAttendanceDateFrom(), f.getAttendanceDateTo(), pg);
+        } else {
+            attendancePage = attendanceRepository.findByAttendanceDate(date, pg);
         }
-        return payrollRepository.findByPayrollMonth(month, pg);
+        return attendancePage.map(this::toAttendanceDTO);
     }
 
-    // ── 5. Department breakdown ───────────────────────────────────────────────
-    public List<Map<String, Object>> getDepartmentBreakdown() {
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Object[] row : employeeRepository.countByDepartment()) {
-            result.add(Map.of(
-                "department", row[0] != null ? row[0] : "Unassigned",
-                "count",      row[1]
-            ));
+    // ── Department Breakdown 
+    public Map<String, Long> getDepartmentBreakdown() {
+        List<Employee> all = employeeRepository.findByDeletedFalse(
+            PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+        Map<String, Long> breakdown = new LinkedHashMap<>();
+        for (Employee e : all) {
+            breakdown.merge(e.getDepartment(), 1L, Long::sum);
         }
-        return result;
+        return breakdown;
+    }
+
+    // ── Payroll with Filters
+    public Page<Payroll> getFilteredPayroll(DashboardFilterRequest f) {
+        Pageable pg = pageable(f);
+        if (f.getPayrollMonth() != null && hasValue(f.getPayrollStatus())) {
+            PayrollStatus s = PayrollStatus.valueOf(f.getPayrollStatus().toUpperCase());
+            return payrollRepository.findByPayrollMonthAndStatus(f.getPayrollMonth(), s, pg);
+        }
+        if (f.getPayrollMonth() != null) {
+            return payrollRepository.findByPayrollMonth(f.getPayrollMonth(), pg);
+        }
+        return payrollRepository.findAll(pg);
+    }
+
+    // ── Helpers
+    private AttendanceResponseDTO toAttendanceDTO(Attendance a) {
+        return AttendanceResponseDTO.from(a);
     }
 
     private Pageable pageable(DashboardFilterRequest f) {
-        Sort sort = f.getSortDir().equalsIgnoreCase("asc")
-                ? Sort.by(f.getSortBy()).ascending()
-                : Sort.by(f.getSortBy()).descending();
+        Sort sort = Sort.by(
+            hasValue(f.getSortDir()) && f.getSortDir().equalsIgnoreCase("asc")
+                ? Sort.Direction.ASC : Sort.Direction.DESC,
+            hasValue(f.getSortBy()) ? f.getSortBy() : "createdAt"
+        );
         return PageRequest.of(f.getPage(), f.getSize(), sort);
     }
 
-    private boolean hasValue(String s) { return s != null && !s.isBlank(); }
+    private boolean hasValue(String s) {
+        return s != null && !s.isBlank();
+    }
 }

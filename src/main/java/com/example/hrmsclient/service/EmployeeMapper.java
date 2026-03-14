@@ -5,12 +5,13 @@ import com.example.hrmsclient.dto.EmployeeResponseDTO;
 import com.example.hrmsclient.entity.Employee;
 import org.springframework.stereotype.Component;
 
+
 @Component
 public class EmployeeMapper {
 
-    //  DTO → Entity
     public Employee toEntity(EmployeeRequestDTO dto) {
         Employee e = new Employee();
+        e.setEmployeeId(dto.getEmployeeId());             // Manual ID
         e.setPrefix(dto.getPrefix());
         e.setFirstName(dto.getFirstName());
         e.setLastName(dto.getLastName());
@@ -21,6 +22,7 @@ public class EmployeeMapper {
         e.setNationality(dto.getNationality());
         e.setWorkEmail(dto.getWorkEmail());
         e.setJoiningDate(dto.getJoiningDate());
+        e.setExitDate(dto.getExitDate());
         e.setHouseNo(dto.getHouseNo());
         e.setCity(dto.getCity());
         e.setState(dto.getState());
@@ -36,66 +38,77 @@ public class EmployeeMapper {
         e.setDesignation(dto.getDesignation());
         e.setPreviousCtc(dto.getPreviousCtc());
         e.setHigherQualification(dto.getHigherQualification());
-        e.setBasicEmployeeSalary(dto.getBasicEmployeeSalary());
         e.setRole(dto.getRole());
+        e.setEmployeeType(dto.getEmployeeType());          // NEW
+        e.setReportingManager(dto.getReportingManager());  // NEW
         e.setBankName(dto.getBankName());
         e.setAccountNo(dto.getAccountNo());
         e.setIfscCode(dto.getIfscCode());
         e.setBankBranch(dto.getBankBranch());
+        // password is set separately (encoded) in service
         return e;
     }
 
-    //  Entity → Response DTO
+    public void updateEntity(Employee e, EmployeeRequestDTO dto) {
+        if (dto.getEmployeeId()      != null) e.setEmployeeId(dto.getEmployeeId());
+        if (dto.getPrefix()          != null) e.setPrefix(dto.getPrefix());
+        if (dto.getFirstName()       != null) e.setFirstName(dto.getFirstName());
+        if (dto.getLastName()        != null) e.setLastName(dto.getLastName());
+        if (dto.getEmailId()         != null) e.setEmailId(dto.getEmailId());
+        if (dto.getContactNumber1()  != null) e.setContactNumber1(dto.getContactNumber1());
+        if (dto.getGender()          != null) e.setGender(dto.getGender());
+        if (dto.getDateOfBirth()     != null) e.setDateOfBirth(dto.getDateOfBirth());
+        if (dto.getNationality()     != null) e.setNationality(dto.getNationality());
+        if (dto.getWorkEmail()       != null) e.setWorkEmail(dto.getWorkEmail());
+        if (dto.getJoiningDate()     != null) e.setJoiningDate(dto.getJoiningDate());
+        if (dto.getExitDate()        != null) e.setExitDate(dto.getExitDate());         // NEW
+        if (dto.getHouseNo()         != null) e.setHouseNo(dto.getHouseNo());
+        if (dto.getCity()            != null) e.setCity(dto.getCity());
+        if (dto.getState()           != null) e.setState(dto.getState());
+        if (dto.getPanNumber()       != null) e.setPanNumber(dto.getPanNumber());
+        if (dto.getAadharNumber()    != null) e.setAadharNumber(dto.getAadharNumber());
+        if (dto.getPassportNumber()  != null) e.setPassportNumber(dto.getPassportNumber());
+        if (dto.getFatherName()      != null) e.setFatherName(dto.getFatherName());
+        if (dto.getMotherName()      != null) e.setMotherName(dto.getMotherName());
+        if (dto.getMaritalStatus()   != null) e.setMaritalStatus(dto.getMaritalStatus());
+        if (dto.getDepartment()      != null) e.setDepartment(dto.getDepartment());
+        if (dto.getDesignation()     != null) e.setDesignation(dto.getDesignation());
+        if (dto.getRole()            != null) e.setRole(dto.getRole());
+        if (dto.getEmployeeType()    != null) e.setEmployeeType(dto.getEmployeeType());   // NEW
+        if (dto.getReportingManager()!= null) e.setReportingManager(dto.getReportingManager()); // NEW
+        if (dto.getBankName()        != null) e.setBankName(dto.getBankName());
+        if (dto.getAccountNo()       != null) e.setAccountNo(dto.getAccountNo());
+        if (dto.getIfscCode()        != null) e.setIfscCode(dto.getIfscCode());
+        if (dto.getBankBranch()      != null) e.setBankBranch(dto.getBankBranch());
+    }
+
     public EmployeeResponseDTO toResponse(Employee e) {
         EmployeeResponseDTO dto = new EmployeeResponseDTO();
         dto.setId(e.getId());
         dto.setEmployeeId(e.getEmployeeId());
         dto.setFullName(e.getFullName());
+        dto.setFirstName(e.getFirstName());
+        dto.setLastName(e.getLastName());
         dto.setEmailId(e.getEmailId());
-        dto.setWorkEmail(e.getWorkEmail());
         dto.setContactNumber1(e.getContactNumber1());
         dto.setGender(e.getGender());
         dto.setDateOfBirth(e.getDateOfBirth());
-        dto.setNationality(e.getNationality());
+        dto.setWorkEmail(e.getWorkEmail());
         dto.setJoiningDate(e.getJoiningDate());
+        dto.setExitDate(e.getExitDate());                           // NEW
         dto.setDepartment(e.getDepartment());
         dto.setDesignation(e.getDesignation());
         dto.setRole(e.getRole());
-        dto.setBasicEmployeeSalary(e.getBasicEmployeeSalary());
-        dto.setEmploymentStatus(e.getEmploymentStatus());
-        dto.setResignationDate(e.getResignationDate());
-        dto.setLastWorkingDay(e.getLastWorkingDay());
+        dto.setEmployeeType(e.getEmployeeType() != null
+            ? e.getEmployeeType().name() : null);                   // NEW
+        dto.setReportingManager(e.getReportingManager());           // NEW
+        dto.setEmploymentStatus(e.getEmploymentStatus() != null
+            ? e.getEmploymentStatus().name() : null);
         dto.setCity(e.getCity());
         dto.setState(e.getState());
+        dto.setBankName(e.getBankName());
         dto.setProfilePhotoUrl(e.getProfilePhotoUrl());
         dto.setCreatedAt(e.getCreatedAt());
-        dto.setUpdatedAt(e.getUpdatedAt());
-        dto.setCreatedBy(e.getCreatedBy());
-        dto.setMaskedPan(mask(e.getPanNumber(), 5));
-        dto.setMaskedAadhar(mask(e.getAadharNumber(), 8));
-        dto.setMaskedAccount(mask(e.getAccountNo(), 8));
         return dto;
-    }
-
-    // Update existing entity from DTO
-    public void updateEntity(Employee e, EmployeeRequestDTO dto) {
-        e.setFirstName(dto.getFirstName());
-        e.setLastName(dto.getLastName());
-        e.setContactNumber1(dto.getContactNumber1());
-        e.setDepartment(dto.getDepartment());
-        e.setDesignation(dto.getDesignation());
-        e.setCity(dto.getCity());
-        e.setState(dto.getState());
-        e.setBasicEmployeeSalary(dto.getBasicEmployeeSalary());
-        e.setRole(dto.getRole());
-        e.setBankName(dto.getBankName());
-        e.setIfscCode(dto.getIfscCode());
-        e.setBankBranch(dto.getBankBranch());
-    }
-    private String mask(String value, int visibleFromEnd) {
-        if (value == null || value.isBlank()) return null;
-        if (value.length() <= visibleFromEnd)  return value;
-        return "X".repeat(value.length() - visibleFromEnd)
-             + value.substring(value.length() - visibleFromEnd);
     }
 }

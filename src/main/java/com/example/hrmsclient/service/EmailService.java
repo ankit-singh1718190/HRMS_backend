@@ -142,64 +142,72 @@ public class EmailService {
 	@Async
 	public void sendPayslipEmail(Payroll payroll) {
 
-		String to = payroll.getEmployee().getEmailId();
-		String name = payroll.getEmployee().getFullName();
-		String month = payroll.getPayrollMonth().format(DateTimeFormatter.ofPattern("MMMM yyyy"));
-		String subject = "Salary Credited - Payslip for " + month;
+	    String to    = payroll.getEmployee().getEmailId();
+	    String name  = payroll.getEmployee().getFullName();
+	    String month = payroll.getPayrollMonth().format(DateTimeFormatter.ofPattern("MMMM yyyy"));
+	    String subject = "Salary Credited - Payslip for " + month;
 
-		try {
-			// Step 1: Build variables for Thymeleaf template
-			Map<String, Object> vars = Map.ofEntries(Map.entry("employeeName", name),
-					Map.entry("employeeId", payroll.getEmployee().getEmployeeId()), Map.entry("month", month),
-					Map.entry("basicSalary", fmt(payroll.getBasicSalary())), Map.entry("hra", fmt(payroll.getHra())),
-					Map.entry("da", fmt(payroll.getDa())),
-					Map.entry("specialAllowance", fmt(payroll.getSpecialAllowance())),
-					Map.entry("overtimeAmount", fmt(payroll.getOvertimeAmount())),
-					Map.entry("bonusAmount", fmt(payroll.getBonusAmount())),
-					Map.entry("reimbursement", fmt(payroll.getReimbursement())),
-					Map.entry("grossSalary", fmt(payroll.getGrossSalary())),
-					Map.entry("pfEmployee", fmt(payroll.getPfEmployee())),
-					Map.entry("esiEmployee", fmt(payroll.getEsiEmployee())),
-					Map.entry("professionalTax", fmt(payroll.getProfessionalTax())),
-					Map.entry("tds", fmt(payroll.getTds())),
-					Map.entry("loanDeduction", fmt(payroll.getLoanDeduction())),
-					Map.entry("otherDeduction", fmt(payroll.getOtherDeduction())),
-					Map.entry("totalDeductions", fmt(payroll.getTotalDeductions())),
-					Map.entry("netSalary", fmt(payroll.getNetSalary())),
-					Map.entry("workingDays", payroll.getWorkingDays()),
-					Map.entry("presentDays", payroll.getPresentDays()), Map.entry("leaveDays", payroll.getLeaveDays()),
-					Map.entry("absentDays", payroll.getAbsentDays()),
-					Map.entry("paymentDate",
-							payroll.getPaymentDate() != null
-									? payroll.getPaymentDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
-									: "N/A"),
-					Map.entry("paymentRef",
-							payroll.getPaymentReference() != null ? payroll.getPaymentReference() : "N/A"),
-					Map.entry("paymentMode", payroll.getPaymentMode() != null ? payroll.getPaymentMode() : "NEFT"));
+	    try {
+	        // Step 1: Build variables for Thymeleaf template
+	        Map<String, Object> vars = Map.ofEntries(
+	            Map.entry("employeeName",     name),
+	            Map.entry("employeeId",       payroll.getEmployee().getEmployeeId()),
+	            Map.entry("month",            month),
+	            Map.entry("basicSalary",      fmt(payroll.getBasicSalary())),
+	            Map.entry("hra",              fmt(payroll.getHra())),
+	            Map.entry("da",               fmt(payroll.getDa())),
+	            Map.entry("specialAllowance", fmt(payroll.getSpecialAllowance())),
+	            Map.entry("arrears",          fmt(payroll.getArrears())),
+	            Map.entry("perfPay",          fmt(payroll.getPerfPay())),
+	            Map.entry("weekendWorkDays",  payroll.getWeekendWorkDays()),
+	            Map.entry("weekendWorkAmount",fmt(payroll.getWeekendWorkAmount())),
+	            Map.entry("reimbursement",    fmt(payroll.getReimbursement())),
+	            Map.entry("fbp",              fmt(payroll.getFbp())),
+	            Map.entry("bonusAmount",      fmt(payroll.getBonusAmount())),
+	            Map.entry("grossSalary",      fmt(payroll.getGrossSalary())),
+	            Map.entry("pfEmployee",       fmt(payroll.getPfEmployee())),
+	            Map.entry("professionalTax",  fmt(payroll.getProfessionalTax())),
+	            Map.entry("tds",              fmt(payroll.getTds())),
+	            Map.entry("salaryAdvance",    fmt(payroll.getSalaryAdvance())),   // was loanDeduction
+	            Map.entry("otherDeduction",   fmt(payroll.getOtherDeduction())),
+	            Map.entry("totalDeductions",  fmt(payroll.getTotalDeductions())),
+	            Map.entry("netSalary",        fmt(payroll.getNetSalary())),
+	            Map.entry("workingDays",      payroll.getWorkingDays()),
+	            Map.entry("presentDays",      payroll.getPresentDays()),
+	            Map.entry("leaveDays",        payroll.getLeaveDays()),
+	            Map.entry("absentDays",       payroll.getAbsentDays()),
+	            Map.entry("paymentDate",      payroll.getPaymentDate() != null
+	                                            ? payroll.getPaymentDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+	                                            : "N/A"),
+	            Map.entry("paymentRef",       payroll.getPaymentReference() != null
+	                                            ? payroll.getPaymentReference() : "N/A"),
+	            Map.entry("paymentMode",      payroll.getPaymentMode() != null
+	                                            ? payroll.getPaymentMode() : "NEFT")
+	        );
 
-			// Step 2: Render Thymeleaf template → HTML
-			Context context = new Context();
-			context.setVariables(vars);
-			String htmlContent = templateEngine.process("email/payslip-email", context);
+	        // Step 2: Render Thymeleaf template → HTML
+	        Context context = new Context();
+	        context.setVariables(vars);
+	        String htmlContent = templateEngine.process("email/payslip-email", context);
 
-			File pdfFile = payslipPdfService.generatePayslip(payroll);
+	        // Step 3: Generate PDF payslip
+	        File pdfFile = payslipPdfService.generatePayslip(payroll);
 
-			// Step 4: Send HTML email + PDF attached
-			MimeMessage message = mailSender.createMimeMessage();
-			MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-			helper.setFrom(fromEmail, fromName);
-			helper.setTo(to);
-			helper.setSubject(subject);
-			helper.setText(htmlContent, true);
-			helper.addAttachment(pdfFile.getName(), pdfFile);
+	        // Step 4: Send HTML email + PDF attached
+	        MimeMessage message = mailSender.createMimeMessage();
+	        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+	        helper.setFrom(fromEmail, fromName);
+	        helper.setTo(to);
+	        helper.setSubject(subject);
+	        helper.setText(htmlContent, true);
+	        helper.addAttachment(pdfFile.getName(), pdfFile);
 
-			mailSender.send(message);
-			log.info("Payslip email sent to: " + to + " | Month: " + month);
+	        mailSender.send(message);
+	        log.info("Payslip email sent to: " + to + " | Month: " + month);
 
-		} catch (Exception e) {
-			log.severe(" Payslip email failed for " + to + ": " + e.getMessage());
-			throw new RuntimeException("Payslip email failed: " + e.getMessage());
-		}
+	    } catch (Exception e) {
+	    	log.severe("Payslip email failed for " + to + " | Month: " + month + " | Reason: " + e.getMessage());
+	    }
 	}
 
 	// HELPER

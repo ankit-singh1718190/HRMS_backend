@@ -1,46 +1,44 @@
 package com.example.hrmsclient.dto;
 
+import com.example.hrmsclient.entity.AttendanceStatus;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+
 public class AttendanceRequestDTO {
 
     @NotNull(message = "Employee ID is required")
-    private Long employeeId;
+    private Long employeeId;          
 
-    @NotNull(message = "Attendance date is required")
-    private LocalDate attendanceDate;
+    @NotNull(message = "Date is required")
+    private LocalDate date;           
 
-    private LocalDateTime checkIn;
-    private LocalDateTime checkOut;
-    private String status;
+    @NotNull(message = "Status is required")
+    private AttendanceStatus status; 
+
+    private LocalDateTime inTime;     
+    private LocalDateTime outTime;   
     private String remarks;
 
     public AttendanceRequestDTO() {}
 
-    public AttendanceRequestDTO(Long employeeId, LocalDate attendanceDate,
-                                LocalDateTime checkIn, LocalDateTime checkOut,
-                                String status, String remarks) {
-        this.employeeId      = employeeId;
-        this.attendanceDate  = attendanceDate;
-        this.checkIn         = checkIn;
-        this.checkOut        = checkOut;
-        this.status          = status;
-        this.remarks         = remarks;
-    }
-    public Long getEmployeeId()             { return employeeId;     }
-    public LocalDate getAttendanceDate()    { return attendanceDate; }
-    public LocalDateTime getCheckIn()       { return checkIn;        }
-    public LocalDateTime getCheckOut()      { return checkOut;       }
-    public String getStatus()               { return status;         }
-    public String getRemarks()              { return remarks;        }
+    public Long getEmployeeId()               { return employeeId; }
+    public void setEmployeeId(Long v)         { this.employeeId = v; }
 
-    public void setEmployeeId(Long employeeId)              { this.employeeId     = employeeId;     }
-    public void setAttendanceDate(LocalDate attendanceDate) { this.attendanceDate = attendanceDate; }
-    public void setCheckIn(LocalDateTime checkIn)           { this.checkIn        = checkIn;        }
-    public void setCheckOut(LocalDateTime checkOut)         { this.checkOut       = checkOut;       }
-    public void setStatus(String status)                    { this.status         = status;         }
-    public void setRemarks(String remarks)                  { this.remarks        = remarks;        }
+    public LocalDate getDate()                { return date; }
+    public void setDate(LocalDate v)          { this.date = v; }
+
+    public AttendanceStatus getStatus()       { return status; }
+    public void setStatus(AttendanceStatus v) { this.status = v; }
+
+    public LocalDateTime getInTime()          { return inTime; }
+    public void setInTime(LocalDateTime v)    { this.inTime = v; }
+
+    public LocalDateTime getOutTime()         { return outTime; }
+    public void setOutTime(LocalDateTime v)   { this.outTime = v; }
+
+    public String getRemarks()                { return remarks; }
+    public void setRemarks(String v)          { this.remarks = v; }
 }

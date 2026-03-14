@@ -15,44 +15,53 @@ import java.util.List;
 @Repository
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
 
-    Page<LeaveRequest> findByEmployee_IdOrderByCreatedAtDesc(Long employeeId, Pageable pageable);
+    Page<LeaveRequest> findByEmployeeId(Long empId, Pageable pageable);
+    Page<LeaveRequest> findByStatus(LeaveStatus status, Pageable pageable);
 
-    Page<LeaveRequest> findByStatusOrderByCreatedAtDesc(LeaveStatus status, Pageable pageable);
+    // NEW: Pending leaves where employee belongs to a specific manager
+    Page<LeaveRequest> findByStatusAndEmployeeIdIn(
+        LeaveStatus status, List<Long> employeeIds, Pageable pageable);
 
-    List<LeaveRequest> findByEmployee_IdAndStatus(Long employeeId, LeaveStatus status);
+    // NEW: Count pending leaves that have a reporting manager (for dashboard tile)
+    @Query("""
+        SELECT COUNT(lr) FROM LeaveRequest lr
+        WHERE lr.status = 'PENDING'
+          AND lr.employee.reportingManager IS NOT NULL
+          AND lr.employee.reportingManager <> ''
+    """)
+    long countPendingLeavesWithReportingManager();
 
-    // Check overlapping leave for same employee
-    @Query("SELECT COUNT(l) > 0 FROM LeaveRequest l WHERE l.employee.id = :empId " +
-           "AND l.status != 'REJECTED' AND l.status != 'CANCELLED' " +
-           "AND l.startDate <= :endDate AND l.endDate >= :startDate")
-    boolean hasOverlappingLeave(@Param("empId") Long empId,
-                                @Param("startDate") LocalDate startDate,
-                                @Param("endDate") LocalDate endDate);
+    // NEW: Count approved leaves by type in a date range (for leave balance report)
+    @Query("""
+        SELECT COUNT(lr) FROM LeaveRequest lr
+        WHERE lr.employee.id = :empId
+          AND lr.status = 'APPROVED'
+          AND lr.leaveType = :leaveType
+          AND lr.startDate >= :from
+          AND lr.endDate   <= :to
+    """)
+    long countApprovedLeavesByType(
+        @Param("empId")     Long empId,
+        @Param("leaveType") String leaveType,
+        @Param("from")      LocalDate from,
+        @Param("to")        LocalDate to);
+    @Query("""
+            SELECT lr FROM LeaveRequest lr
+            WHERE lr.employee.id = :empId
+              AND lr.startDate >= :from
+              AND lr.endDate   <= :to
+        """)
+        List<LeaveRequest> findByEmployeeIdAndDateRange(
+            @Param("empId") Long empId,
+            @Param("from")  LocalDate from,
+            @Param("to")    LocalDate to);
 
-    long countByStatus(LeaveStatus status);
-
-    // Monthly leave summary
-    @Query("SELECT SUM(DATEDIFF(l.endDate, l.startDate) + 1) FROM LeaveRequest l " +
-           "WHERE l.employee.id = :empId AND l.status = 'APPROVED' " +
-           "AND YEAR(l.startDate) = :year AND MONTH(l.startDate) = :month")
-    Long sumApprovedLeaveDaysForMonth(@Param("empId") Long empId,
-                                      @Param("year") int year,
-                                      @Param("month") int month);
-
- // For CalendarService - employee calendar
- @Query("SELECT l FROM LeaveRequest l WHERE l.employee.id = :empId " +
-        "AND l.status IN ('APPROVED','PENDING') " +
-        "AND l.startDate <= :end AND l.endDate >= :start")
- List<LeaveRequest> findByEmployeeIdAndDateRange(
-         @Param("empId") Long empId,
-         @Param("start") LocalDate start,
-         @Param("end") LocalDate end);
-
- // For CalendarService - admin calendar (all employees)
- @Query("SELECT l FROM LeaveRequest l WHERE " +
-        "l.startDate <= :end AND l.endDate >= :start " +
-        "ORDER BY l.startDate")
- List<LeaveRequest> findAllByDateRange(
-         @Param("start") LocalDate start,
-         @Param("end") LocalDate end);
+        @Query("""
+            SELECT lr FROM LeaveRequest lr
+            WHERE lr.startDate >= :from
+              AND lr.endDate   <= :to
+        """)
+        List<LeaveRequest> findAllByDateRange(
+            @Param("from") LocalDate from,
+            @Param("to")   LocalDate to);
 }

@@ -1,6 +1,7 @@
 package com.example.hrmsclient.service;
 
 import com.example.hrmsclient.entity.Attendance;
+import com.example.hrmsclient.entity.Employee;
 import com.example.hrmsclient.repository.AttendanceRepository;
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,11 +34,6 @@ public class AttendanceEmailService {
     @Value("${app.mail.from-name}")
     private String fromName;
 
-    /**
-     * Admin email(s) to receive the daily attendance reports.
-     * Configure in application.properties:
-     *   app.mail.admin=admin@company.com
-     */
     @Value("${app.mail.admin}")
     private String adminEmail;
 
@@ -49,8 +45,7 @@ public class AttendanceEmailService {
         this.attendanceRepository = attendanceRepository;
     }
 
-    //  MORNING REPORT  –  runs every day at 10:00 AM
-    //  Cron: second minute hour day month weekday
+    // ── MORNING REPORT – runs every weekday at 10:00 AM 
     @Scheduled(cron = "0 0 10 * * MON-FRI")
     public void sendMorningCheckinReport() {
         LocalDate today = LocalDate.now();
@@ -63,24 +58,23 @@ public class AttendanceEmailService {
                 today.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
 
         Map<String, Object> vars = Map.of(
-                "reportTitle",   "Morning Check-In Report",
-                "reportDate",    today.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
-                "generatedAt",   LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a")),
+                "reportTitle",    "Morning Check-In Report",
+                "reportDate",     today.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
+                "generatedAt",    LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a")),
                 "attendanceList", checkedIn,
-                "totalCount",    checkedIn.size(),
-                "reportType",    "CHECK-IN"
+                "totalCount",     checkedIn.size(),
+                "reportType",     "CHECK-IN"
         );
 
         sendAttendanceEmail(adminEmail, subject, "email/checkin-report", vars);
     }
 
-    //  EVENING REPORT  –  runs every day at 07:00 PM
+    // ── EVENING REPORT – runs every weekday at 07:00 PM 
     @Scheduled(cron = "0 0 19 * * MON-FRI")
     public void sendEveningCheckoutReport() {
         LocalDate today = LocalDate.now();
         log.info("Sending evening check-out report for: " + today);
 
-        // Fetch all attendance records for today that have a check-out time
         List<Attendance> checkedOut =
                 attendanceRepository.findByAttendanceDateAndCheckOutIsNotNull(today);
 
@@ -88,29 +82,92 @@ public class AttendanceEmailService {
                 today.format(DateTimeFormatter.ofPattern("dd MMM yyyy"));
 
         Map<String, Object> vars = Map.of(
-                "reportTitle",   "Evening Check-Out Report",
-                "reportDate",    today.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
-                "generatedAt",   LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a")),
+                "reportTitle",    "Evening Check-Out Report",
+                "reportDate",     today.format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
+                "generatedAt",    LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a")),
                 "attendanceList", checkedOut,
-                "totalCount",    checkedOut.size(),
-                "reportType",    "CHECK-OUT"
+                "totalCount",     checkedOut.size(),
+                "reportType",     "CHECK-OUT"
         );
 
         sendAttendanceEmail(adminEmail, subject, "email/checkout-report", vars);
     }
 
+    // ── MANUAL TRIGGERS 
+    public void triggerCheckinReport()  { sendMorningCheckinReport();  }
+    public void triggerCheckoutReport() { sendEveningCheckoutReport(); }
 
-    //  MANUAL TRIGGER  –  call from controller/test
-    public void triggerCheckinReport() {
-        sendMorningCheckinReport();
+    // ── EMPLOYEE CHECK-IN CONFIRMATION EMAIL 
+    public void sendCheckInEmail(Employee employee, Attendance attendance) {
+        try {
+            Context context = new Context();
+            context.setVariables(Map.of(
+                    "employeeName",   employee.getFirstName() + " " + employee.getLastName(),
+                    "attendanceDate", attendance.getAttendanceDate()
+                                         .format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
+                    "checkInTime",    attendance.getCheckIn()
+                                         .format(DateTimeFormatter.ofPattern("hh:mm a")),
+                    "checkInAddress", attendance.getCheckInAddress() != null
+                                         ? attendance.getCheckInAddress() : "N/A"
+            ));
+
+            String htmlContent = templateEngine.process("email/employee-checkin", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(employee.getEmailId());
+            helper.setSubject("Check-In Confirmation – " +
+                    attendance.getAttendanceDate()
+                              .format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Check-in confirmation email sent to: " + employee.getEmailId());
+
+        } catch (Exception e) {
+            log.severe("Failed to send check-in email: " + e.getMessage());
+            throw new RuntimeException("Check-in email failed: " + e.getMessage(), e);
+        }
     }
 
+    // ── EMPLOYEE CHECK-OUT CONFIRMATION EMAIL
+    public void sendCheckOutEmail(Employee employee, Attendance attendance) {
+        try {
+            Context context = new Context();
+            context.setVariables(Map.of(
+                    "employeeName",   employee.getFirstName() + " " + employee.getLastName(),
+                    "attendanceDate", attendance.getAttendanceDate()
+                                         .format(DateTimeFormatter.ofPattern("EEEE, dd MMMM yyyy")),
+                    "checkInTime",    attendance.getCheckIn()
+                                         .format(DateTimeFormatter.ofPattern("hh:mm a")),
+                    "checkOutTime",   attendance.getCheckOut()
+                                         .format(DateTimeFormatter.ofPattern("hh:mm a")),
+                    "workingHours",   attendance.getWorkingHours() != null
+                                         ? attendance.getWorkingHours() : "N/A"
+            ));
 
-    public void triggerCheckoutReport() {
-        sendEveningCheckoutReport();
+            String htmlContent = templateEngine.process("email/employee-checkout", context);
+
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(fromEmail, fromName);
+            helper.setTo(employee.getEmailId());
+            helper.setSubject("Check-Out Confirmation – " +
+                    attendance.getAttendanceDate()
+                              .format(DateTimeFormatter.ofPattern("dd MMM yyyy")));
+            helper.setText(htmlContent, true);
+
+            mailSender.send(message);
+            log.info("Check-out confirmation email sent to: " + employee.getEmailId());
+
+        } catch (Exception e) {
+            log.severe("Failed to send check-out email: " + e.getMessage());
+            throw new RuntimeException("Check-out email failed: " + e.getMessage(), e);
+        }
     }
 
-    //  INTERNAL HELPER
+    // ── INTERNAL HELPER
     private void sendAttendanceEmail(String to, String subject,
                                      String templateName,
                                      Map<String, Object> variables) {

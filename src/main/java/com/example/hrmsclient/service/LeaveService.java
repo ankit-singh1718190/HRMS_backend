@@ -4,188 +4,205 @@ import com.example.hrmsclient.dto.*;
 import com.example.hrmsclient.entity.*;
 import com.example.hrmsclient.repository.*;
 import org.springframework.data.domain.*;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 
 @Service
-@Transactional(readOnly = true)
 public class LeaveService {
 
-    private final LeaveRequestRepository leaveRepo;
-    private final EmployeeRepository     employeeRepo;
-    private final HrmsEmailService       hrmsEmailService;
-    private final LeaveBalanceService    leaveBalanceService;
+    private final LeaveRequestRepository  leaveRequestRepository;
+    private final LeaveBalanceRepository  leaveBalanceRepository;
+    private final EmployeeRepository      employeeRepository;
+    private final HrmsEmailService        hrmsEmailService;
 
-    public LeaveService(LeaveRequestRepository leaveRepo,
-                        EmployeeRepository employeeRepo,
-                        HrmsEmailService hrmsEmailService,
-                        LeaveBalanceService leaveBalanceService) {
-        this.leaveRepo           = leaveRepo;
-        this.employeeRepo        = employeeRepo;
-        this.hrmsEmailService    = hrmsEmailService;
-        this.leaveBalanceService = leaveBalanceService;
+    public LeaveService(LeaveRequestRepository leaveRequestRepository,
+                        LeaveBalanceRepository leaveBalanceRepository,
+                        EmployeeRepository employeeRepository,
+                        HrmsEmailService hrmsEmailService) {
+        this.leaveRequestRepository = leaveRequestRepository;
+        this.leaveBalanceRepository = leaveBalanceRepository;
+        this.employeeRepository     = employeeRepository;
+        this.hrmsEmailService       = hrmsEmailService;
     }
 
+    // ── Apply Leave
     @Transactional
     public LeaveResponseDTO applyLeave(LeaveRequestDTO dto) {
+        Employee employee = employeeRepository.findByIdAndDeletedFalse(dto.getEmployeeId())
+            .orElseThrow(() -> new RuntimeException("Employee not found"));
 
-        Employee employee = employeeRepo.findByIdAndDeletedFalse(dto.getEmployeeId())
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+        validateLeaveEligibility(employee, dto.getLeaveType(), dto.getStartDate(), dto.getEndDate());
 
-        if (dto.getEndDate().isBefore(dto.getStartDate())) {
-            throw new IllegalArgumentException("End date cannot be before start date");
-        }
+        LeaveRequest request = new LeaveRequest();
+        request.setEmployee(employee);
+        request.setLeaveType(dto.getLeaveType());
+        request.setStartDate(dto.getStartDate());
+        request.setEndDate(dto.getEndDate());
+        request.setReason(dto.getReason());
+        request.setStatus(LeaveStatus.PENDING);
 
-        if (leaveRepo.hasOverlappingLeave(
-                dto.getEmployeeId(),
-                dto.getStartDate(),
-                dto.getEndDate())) {
-
-            throw new IllegalArgumentException("Overlapping leave request exists");
-        }
-
-        LeaveRequest leave = new LeaveRequest();
-        leave.setEmployee(employee);
-        leave.setLeaveType(dto.getLeaveType());
-        leave.setStartDate(dto.getStartDate());
-        leave.setEndDate(dto.getEndDate());
-        leave.setReason(dto.getReason());
-        leave.setStatus(LeaveStatus.PENDING);
-
-        int totalDays = (int) (dto.getEndDate().toEpochDay() - dto.getStartDate().toEpochDay()) + 1;
-
-        int leaveYear = dto.getStartDate().getYear();
-        int leaveMonth = dto.getStartDate().getMonthValue();
-
-        LeaveDeductionResultDTO result = leaveBalanceService.deductDays(
-                dto.getEmployeeId(),
-                dto.getLeaveType(),
-                leaveYear,
-                leaveMonth,
-                totalDays
-        );
-
-        leave.setPaidDays(result.getPaidDays());
-        leave.setUnpaidDays(result.getUnpaidDays());
-
-        LeaveRequest saved = leaveRepo.save(leave);
-
+        LeaveRequest saved = leaveRequestRepository.save(request);
         hrmsEmailService.sendLeaveAppliedEmail(saved);
-
-        return toDto(saved);
+        return toDTO(saved);
     }
 
-    // ─── Approve
-
     @Transactional
-    public LeaveResponseDTO approveLeave(Long leaveId) {
-        LeaveRequest leave = leaveRepo.findById(leaveId)
-            .orElseThrow(() -> new RuntimeException("Leave not found"));
-
-        if (leave.getStatus() != LeaveStatus.PENDING)
-            throw new IllegalStateException("Leave is not in PENDING state");
-
-        leave.setStatus(LeaveStatus.APPROVED);
-        leave.setApprovedBy(
-            SecurityContextHolder.getContext().getAuthentication().getName());
-        leave.setApprovedAt(LocalDateTime.now());
-
-        LeaveRequest saved = leaveRepo.save(leave);
+    public LeaveResponseDTO approveLeave(Long id) {
+        LeaveRequest request = getById(id);
+        if (request.getStatus() != LeaveStatus.PENDING) {
+            throw new IllegalStateException("Only PENDING leave can be approved");
+        }
+        request.setStatus(LeaveStatus.APPROVED);
+        request.setApprovedAt(java.time.LocalDateTime.now());
+        LeaveRequest saved = leaveRequestRepository.save(request);
         hrmsEmailService.sendLeaveApprovedEmail(saved);
-        return toDto(saved);
+        return toDTO(saved);
     }
 
-    // ─── Reject
-
     @Transactional
-    public LeaveResponseDTO rejectLeave(Long leaveId, String reason) {
-        LeaveRequest leave = leaveRepo.findById(leaveId)
-            .orElseThrow(() -> new RuntimeException("Leave not found"));
-
-        if (leave.getStatus() != LeaveStatus.PENDING)
-            throw new IllegalStateException("Only PENDING leaves can be rejected");
-
-        leave.setStatus(LeaveStatus.REJECTED);
-        leave.setRejectionReason(reason);
-        leaveBalanceService.restoreDays(
-            leave.getEmployee().getId(),
-            leave.getLeaveType(),
-            leave.getStartDate().getYear(),
-            leave.getStartDate().getMonthValue(),
-            leave.getPaidDays(),
-            leave.getUnpaidDays()
-        );
-        leave.setPaidDays(0);
-        leave.setUnpaidDays(0);
-
-        LeaveRequest saved = leaveRepo.save(leave);
+    public LeaveResponseDTO rejectLeave(Long id, String reason) {
+        LeaveRequest request = getById(id);
+        if (request.getStatus() != LeaveStatus.PENDING) {
+            throw new IllegalStateException("Only PENDING leave can be rejected");
+        }
+        request.setStatus(LeaveStatus.REJECTED);
+        request.setRejectionReason(reason);
+        LeaveRequest saved = leaveRequestRepository.save(request);
         hrmsEmailService.sendLeaveRejectedEmail(saved);
-        return toDto(saved);
+        return toDTO(saved);
     }
 
-    // ─── Cancel
-
-    @Transactional
-    public LeaveResponseDTO cancelLeave(Long leaveId) {
-        LeaveRequest leave = leaveRepo.findById(leaveId)
-            .orElseThrow(() -> new RuntimeException("Leave not found"));
-
-        if (leave.getStatus() != LeaveStatus.PENDING)
-            throw new IllegalStateException("Only PENDING leaves can be cancelled");
-
-        leave.setStatus(LeaveStatus.CANCELLED);
-
-        leaveBalanceService.restoreDays(
-            leave.getEmployee().getId(),
-            leave.getLeaveType(),
-            leave.getStartDate().getYear(),
-            leave.getStartDate().getMonthValue(),
-            leave.getPaidDays(),
-            leave.getUnpaidDays()
-        );
-        leave.setPaidDays(0);
-        leave.setUnpaidDays(0);
-
-        return toDto(leaveRepo.save(leave));
-    }
-
-    // ─── Queries
-
-    public PageResponseDTO<LeaveResponseDTO> getLeavesByEmployee(
-            Long empId, int page, int size) {
-        Page<LeaveRequest> result = leaveRepo.findByEmployee_IdOrderByCreatedAtDesc(
-            empId, PageRequest.of(page, size));
-        return PageResponseDTO.from(result.map(this::toDto));
+    public PageResponseDTO<LeaveResponseDTO> getLeavesByEmployee(Long empId, int page, int size) {
+        Page<LeaveRequest> result = leaveRequestRepository
+            .findByEmployeeId(empId, PageRequest.of(page, size, Sort.by("createdAt").descending()));
+        return PageResponseDTO.from(result.map(this::toDTO));
     }
 
     public PageResponseDTO<LeaveResponseDTO> getPendingLeaves(int page, int size) {
-        Page<LeaveRequest> result = leaveRepo.findByStatusOrderByCreatedAtDesc(
-            LeaveStatus.PENDING, PageRequest.of(page, size));
-        return PageResponseDTO.from(result.map(this::toDto));
+        Page<LeaveRequest> result = leaveRequestRepository
+            .findByStatus(LeaveStatus.PENDING,
+                PageRequest.of(page, size, Sort.by("createdAt").ascending()));
+        return PageResponseDTO.from(result.map(this::toDTO));
+    }
+    public PageResponseDTO<LeaveResponseDTO> getPendingLeavesForManager(
+            String managerEmployeeId, int page, int size) {
+
+        // Find all employees whose reporting manager is this manager
+        List<Employee> reportees = employeeRepository
+            .findByReportingManagerAndDeletedFalse(managerEmployeeId);
+
+        List<Long> reporteeIds = reportees.stream()
+            .map(Employee::getId)
+            .toList();
+
+        if (reporteeIds.isEmpty()) {
+        	return PageResponseDTO.from(Page.empty());
+        }
+
+        Page<LeaveRequest> result = leaveRequestRepository
+            .findByStatusAndEmployeeIdIn(
+                LeaveStatus.PENDING,
+                reporteeIds,
+                PageRequest.of(page, size, Sort.by("createdAt").ascending()));
+        return PageResponseDTO.from(result.map(this::toDTO));
     }
 
-    // ─── Mapper 
+    public List<Map<String, Object>> getLeaveBalanceReport() {
+        List<Employee> employees = employeeRepository
+            .findByEmploymentStatusAndDeletedFalse(
+                EmploymentStatus.ACTIVE,
+                PageRequest.of(0, Integer.MAX_VALUE, Sort.by("firstName")))
+            .getContent();
 
-    private LeaveResponseDTO toDto(LeaveRequest l) {
-        return new LeaveResponseDTO(
-            l.getId(),
-            l.getEmployee().getEmployeeId(),
-            l.getEmployee().getFullName(),
-            l.getLeaveType(),
-            l.getStartDate(),
-            l.getEndDate(),
-            l.getLeaveDays(),
-            l.getPaidDays(),
-            l.getUnpaidDays(),
-            l.getStatus(),
-            l.getReason(),
-            l.getRejectionReason(),
-            l.getApprovedBy(),
-            l.getApprovedAt(),
-            l.getCreatedAt()
-        );
+        List<Map<String, Object>> report = new ArrayList<>();
+
+        for (Employee emp : employees) {
+            int fyYear = getCurrentFYYear();
+
+            // Get entitlements based on employee type
+            int plannedEntitlement = getEntitlement(emp.getEmployeeType(), "Planned");
+            int sickEntitlement    = getEntitlement(emp.getEmployeeType(), "Sick");
+
+            // Count approved leaves taken this FY
+            LocalDate fyStart = LocalDate.of(fyYear, 4, 1);
+            LocalDate fyEnd   = LocalDate.of(fyYear + 1, 3, 31);
+
+            long plannedAvailed = leaveRequestRepository.countApprovedLeavesByType(
+                emp.getId(), "Planned", fyStart, fyEnd);
+            long sickAvailed = leaveRequestRepository.countApprovedLeavesByType(
+                emp.getId(), "Sick", fyStart, fyEnd);
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("employeeId",          emp.getEmployeeId());
+            row.put("employeeName",         emp.getFullName());
+            row.put("department",           emp.getDepartment());
+            row.put("employeeType",         emp.getEmployeeType() != null ? emp.getEmployeeType().name() : "");
+            row.put("plannedOpeningBalance",plannedEntitlement);
+            row.put("plannedAvailed",       plannedAvailed);
+            row.put("plannedClosingBalance",Math.max(plannedEntitlement - plannedAvailed, 0));
+            row.put("sickOpeningBalance",   sickEntitlement);
+            row.put("sickAvailed",          sickAvailed);
+            row.put("sickClosingBalance",   Math.max(sickEntitlement - sickAvailed, 0));
+            report.add(row);
+        }
+        return report;
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private void validateLeaveEligibility(Employee emp, String leaveType,
+                                           LocalDate start, LocalDate end) {
+        EmployeeType type = emp.getEmployeeType();
+        if (type == null) return; // skip for legacy records
+
+        int entitlement = getEntitlement(type, leaveType);
+        if (entitlement == 0) {
+            throw new IllegalArgumentException(
+                emp.getEmployeeType().name() + " employees are not entitled to " + leaveType + " leave");
+        }
+        // Could add balance check here — left as extension point
+    }
+
+    private int getEntitlement(EmployeeType type, String leaveType) {
+        if (type == null) return 0;
+        return switch (type) {
+            case FULL_TIME -> leaveType.equalsIgnoreCase("Planned") ? 15 : 10;
+            case CONTRACT  -> leaveType.equalsIgnoreCase("Planned") ? 10 :  6;
+            case TEMPORARY -> leaveType.equalsIgnoreCase("Planned") ?  6 :  4;
+            case INTERN    -> leaveType.equalsIgnoreCase("Planned") ?  5 :  3;
+        };
+    }
+
+    private int getCurrentFYYear() {
+        LocalDate today = LocalDate.now();
+        return today.getMonthValue() >= 4 ? today.getYear() : today.getYear() - 1;
+    }
+
+    private LeaveRequest getById(Long id) {
+        return leaveRequestRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Leave request not found: " + id));
+    }
+    private LeaveResponseDTO toDTO(LeaveRequest r) {
+        LeaveResponseDTO dto = new LeaveResponseDTO();
+        dto.setId(r.getId());
+        dto.setEmployeeId(r.getEmployee().getEmployeeId());   
+        dto.setEmployeeName(r.getEmployee().getFullName());
+        dto.setLeaveType(r.getLeaveType());
+        dto.setStartDate(r.getStartDate());
+        dto.setEndDate(r.getEndDate());
+        dto.setTotalDays(r.getLeaveDays());                   
+        dto.setPaidDays(r.getPaidDays());
+        dto.setUnpaidDays(r.getUnpaidDays());
+        dto.setStatus(r.getStatus());                         
+        dto.setReason(r.getReason());
+        dto.setRejectionReason(r.getRejectionReason());
+        dto.setApprovedBy(r.getApprovedBy());
+        dto.setCreatedAt(r.getCreatedAt());                   
+        return dto;
     }
 }

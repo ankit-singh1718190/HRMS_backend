@@ -154,23 +154,22 @@ public class PayslipPdfService {
         table.setSpacingBefore(5f);
 
         addTableHeader(table, "Earnings", "Amount (₹)", "Deductions", "Amount (₹)");
-
         String[][] rows = {
-            { "Basic Salary",         fmt(p.getBasicSalary()),
-              "PF Employee (12%)",    fmt(p.getPfEmployee()) },
-            { "HRA (40%)",            fmt(p.getHra()),
-              "ESI Employee (0.75%)", fmt(p.getEsiEmployee()) },
-            { "DA (10%)",             fmt(p.getDa()),
-              "Professional Tax",     fmt(p.getProfessionalTax()) },
-            { "Special Allowance",    fmt(p.getSpecialAllowance()),
-              "TDS (Income Tax)",     fmt(p.getTds()) },
-            { "Overtime",             fmt(p.getOvertimeAmount()),
-              "Loan Deduction",       fmt(p.getLoanDeduction()) },
-            { "Bonus",                fmt(p.getBonusAmount()),
-              "Other Deduction",      fmt(p.getOtherDeduction()) },
-            { "Reimbursement",        fmt(p.getReimbursement()),
-              "",                     "" }
-        };
+        	    { "Basic Salary",         fmt(p.getBasicSalary()),
+        	      "PF Employee (12%)",    fmt(p.getPfEmployee()) },
+        	    { "HRA (40%)",            fmt(p.getHra()),
+        	      "Salary Advance",       fmt(p.getSalaryAdvance()) },   
+        	    { "DA (10%)",             fmt(p.getDa()),
+        	      "Professional Tax",     fmt(p.getProfessionalTax()) },
+        	    { "Special Allowance",    fmt(p.getSpecialAllowance()),
+        	      "TDS (Income Tax)",     fmt(p.getTds()) },
+        	    { "Weekend Work",         fmt(p.getWeekendWorkAmount()),  
+        	      "Other Deduction",      fmt(p.getOtherDeduction()) },
+        	    { "Bonus",                fmt(p.getBonusAmount()),
+        	      "Arrears",              fmt(p.getArrears()) },
+        	    { "Reimbursement",        fmt(p.getReimbursement()),
+        	      "FBP",                  fmt(p.getFbp()) }
+        	};
 
         boolean alt = false;
         for (String[] row : rows) {

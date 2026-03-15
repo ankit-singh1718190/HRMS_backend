@@ -82,13 +82,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    // Skip filter for public endpoints
+    // Skip only login/docs — register endpoints require JWT so admin/HR can add employee/admin
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
         return path.startsWith("/api/auth/") ||
-               path.equals("/api/employee/register") ||
-               path.equals("/api/admin/register") ||
                path.startsWith("/swagger-ui") ||
                path.startsWith("/v3/api-docs");
     }

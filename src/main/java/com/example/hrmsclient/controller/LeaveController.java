@@ -1,10 +1,14 @@
 package com.example.hrmsclient.controller;
 
 import com.example.hrmsclient.dto.*;
+import com.example.hrmsclient.repository.EmployeeRepository;
 import com.example.hrmsclient.service.LeaveService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,9 +20,11 @@ import java.util.Map;
 public class LeaveController {
 
     private final LeaveService leaveService;
+    private final EmployeeRepository employeeRepository;
 
-    public LeaveController(LeaveService leaveService) {
+    public LeaveController(LeaveService leaveService, EmployeeRepository employeeRepository) {
         this.leaveService = leaveService;
+        this.employeeRepository = employeeRepository;
     }
 
     @PostMapping("/apply")
@@ -47,13 +53,19 @@ public class LeaveController {
     public ResponseEntity<ApiResponse<PageResponseDTO<LeaveResponseDTO>>> getByEmployee(
             @PathVariable Long empId,
             @RequestParam(defaultValue = "0")  int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            Authentication auth) {
+        if (auth != null && auth.getAuthorities().contains(new SimpleGrantedAuthority("ROLE_EMPLOYEE"))) {
+            employeeRepository.findByEmailId(auth.getName())
+                    .filter(emp -> emp.getId().equals(empId))
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("You can only view your own leaves"));
+        }
         return ResponseEntity.ok(
             ApiResponse.success(leaveService.getLeavesByEmployee(empId, page, size), "Success"));
     }
 
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','HR','MANAGER')")
     public ResponseEntity<ApiResponse<PageResponseDTO<LeaveResponseDTO>>> getPending(
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {

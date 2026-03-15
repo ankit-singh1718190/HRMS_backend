@@ -227,12 +227,17 @@ public class EmailService {
 			helper.setTo(employee.getEmailId());
 			helper.setSubject("Your Form 16 for FY " + financialYear + " is now available");
 
-			String body = "Dear " + employee.getFirstName() + ",\n\n" + "Your Form 16 for Financial Year "
-					+ financialYear + " has been uploaded by HR\n" + "and is now available for download.\n\n"
-					+ "HOW TO DOWNLOAD:\n" + "1. Login to your Employee Dashboard\n"
-					+ "2. Go to: My Documents > Form 16\n" + "3. Click Download next to FY " + financialYear + "\n\n"
+			String body = "Dear " + employee.getFirstName() + ",\n\n"
+					+ "Your Form 16 for Financial Year " + financialYear + " has been uploaded by HR\n"
+					+ "and is now available for download from your HRMS portal.\n\n"
+					+ "HOW TO DOWNLOAD:\n"
+					+ "1. Login to your Employee Dashboard\n"
+					+ "2. Go to: My Documents > Form 16\n"
+					+ "3. Click Download next to FY " + financialYear + "\n\n"
 					+ "You will need Form 16 to file your Income Tax Return (ITR).\n\n"
-					+ "For any queries, please contact HR at " + fromEmail + ".\n\n" + "Regards,\n" + "HR Team\n"
+					+ "For any queries, please contact HR at " + fromEmail + ".\n\n"
+					+ "Regards,\n"
+					+ "HR Team\n"
 					+ fromName;
 
 			helper.setText(body, false);

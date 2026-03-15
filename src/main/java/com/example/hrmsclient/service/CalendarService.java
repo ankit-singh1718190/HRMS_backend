@@ -10,6 +10,7 @@ import com.example.hrmsclient.entity.LeaveRequest;
 import com.example.hrmsclient.repository.AttendanceRepository;
 import com.example.hrmsclient.repository.LeaveRequestRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -36,6 +37,7 @@ public class CalendarService {
     }
 
     // ─── Employee Calendar ────────────────────────────────────────────────────
+    @Transactional(readOnly = true)
     public List<CalendarDayDTO> getEmployeeCalendar(Long employeeId, int year, int month) {
 
         YearMonth ym    = YearMonth.of(year, month);
@@ -99,6 +101,7 @@ public class CalendarService {
         return calendar;
     }
 
+    @Transactional(readOnly = true)
     public AdminCalendarDTO getAdminCalendar(int year, int month) {
         YearMonth ym    = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);

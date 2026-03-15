@@ -30,8 +30,11 @@ public class CustomUserDetailsService implements UserDetailsService {
         Admin admin = adminRepository.findByEmailId(emailId).orElse(null);
 
         if (admin != null) {
+            String roleValue = admin.getRole() != null
+                    ? admin.getRole().toUpperCase().replace(" ", "_")
+                    : "ADMIN";
             SimpleGrantedAuthority authority =
-                    new SimpleGrantedAuthority("ROLE_" + admin.getRole());
+                    new SimpleGrantedAuthority("ROLE_" + roleValue);
 
             return User.builder()
                     .username(admin.getEmailId())

@@ -10,7 +10,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -59,11 +59,6 @@ public class SecurityConfig {
     //   PATCH /api/admin/{id}/toggle-active
     //   DELETE /api/admin/{id}        → Delete admin
     //   GET  /api/admin/stats         → Admin statistics
-    //   POST /api/admin/form16/upload-bulk
-    //   POST /api/admin/form16/upload/{employeeId}
-    //   GET  /api/admin/form16/list
-    //   GET  /api/admin/form16/status
-    //   DELETE /api/admin/form16/{id}
     //   POST /api/employee/register   → Register new employee
     //   DELETE /api/employee/{id}     → Hard delete employee
     //   PUT  /api/employee/{id}/exit  → Mark employee exit
@@ -133,8 +128,6 @@ public class SecurityConfig {
     //   GET  /api/attendance/date
     //   POST /api/leaves/apply
     //   GET  /api/employee/{id}        → Own profile (service layer enforces ownership)
-    //   GET  /api/employee/form16/my-list
-    //   GET  /api/employee/form16/download
     //   GET  /api/payroll/month        → Own payslip by month
     //   GET  /api/payroll/employee/{employeeId}  → Own payslips
     //   GET  /api/calendar/employee/{employeeId}
@@ -166,7 +159,7 @@ public class SecurityConfig {
                 // ── 3. ADMIN + HR: Employee CRUD ───────────────────────────
                 .requestMatchers(
                     HttpMethod.POST,   "/api/employee/register")
-                    .hasAnyRole("ADMIN", "HR")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR")
 
                 .requestMatchers(HttpMethod.GET,
                     "/api/employee",
@@ -176,7 +169,7 @@ public class SecurityConfig {
                     "/api/employee/exited",
                     "/api/employee/departments",
                     "/api/employee/dashboard")
-                    .hasAnyRole("ADMIN", "HR")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER")
 
                 .requestMatchers(
                     HttpMethod.PUT,    "/api/employee/{id}")
@@ -263,9 +256,10 @@ public class SecurityConfig {
 
                 .requestMatchers(HttpMethod.GET,
                     "/api/leaves/pending",
-                    "/api/leaves/pending/manager/{managerEmployeeId}",
-                    "/api/leaves/employee/{empId}")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+                    "/api/leaves/pending/manager/{managerEmployeeId}")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER")
+                .requestMatchers(HttpMethod.GET, "/api/leaves/employee/{empId}")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
                 // ── 10. ADMIN + HR + MANAGER: Attendance reports ────────────
                 .requestMatchers(HttpMethod.GET,
@@ -311,12 +305,6 @@ public class SecurityConfig {
                     HttpMethod.GET, "/api/employee/{id}")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 15. ALL AUTHENTICATED: Own Form 16 ──────────────────────
-                .requestMatchers(
-                    "/api/employee/form16/my-list",
-                    "/api/employee/form16/download")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
-
                 // ── 16. ALL AUTHENTICATED: Own payslip ──────────────────────
                 .requestMatchers(HttpMethod.GET,
                     "/api/payroll/month",
@@ -343,9 +331,10 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /** Plain-text passwords (no hashing). Use only for local/dev; enable BCrypt for production. */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
+        return NoOpPasswordEncoder.getInstance();
     }
 
     @Bean

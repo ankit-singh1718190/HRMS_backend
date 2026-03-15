@@ -31,7 +31,7 @@ public class DashboardController {
     // Overview stats card
     // GET /api/dashboard/overview
     @GetMapping("/overview")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getOverview() {
         return ResponseEntity.ok(Map.of(
             "status", "success",
@@ -44,7 +44,7 @@ public class DashboardController {
     //                              &role=EMPLOYEE&employmentStatus=ACTIVE
     //                              &search=ravi&page=0&size=10&sortBy=firstName&sortDir=asc
     @GetMapping("/employees")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getEmployees(@ModelAttribute DashboardFilterRequest filter) {
         Page<Employee> employees = dashboardService.getFilteredEmployees(filter);
         return ResponseEntity.ok(Map.of(
@@ -77,7 +77,7 @@ public class DashboardController {
     // Department breakdown chart data
     // GET /api/dashboard/departments
     @GetMapping("/departments")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getDepartments() {
         return ResponseEntity.ok(Map.of(
             "status", "success",

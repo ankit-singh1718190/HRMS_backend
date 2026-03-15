@@ -9,18 +9,27 @@ public class LoginResponseDTO {
     private String fullName;
     private String role;
     private String employeeId;
+    /** Numeric employee DB id (for employees only); used by frontend for leave apply / own leaves. */
+    private Long id;
 
     public LoginResponseDTO() {}
 
     public LoginResponseDTO(String accessToken, String refreshToken,
                             String emailId, String fullName,
                             String role, String employeeId) {
+        this(accessToken, refreshToken, emailId, fullName, role, employeeId, null);
+    }
+
+    public LoginResponseDTO(String accessToken, String refreshToken,
+                            String emailId, String fullName,
+                            String role, String employeeId, Long id) {
         this.accessToken  = accessToken;
         this.refreshToken = refreshToken;
         this.emailId      = emailId;
         this.fullName     = fullName;
         this.role         = role;
         this.employeeId   = employeeId;
+        this.id           = id;
     }
 
     // Getters & Setters
@@ -44,4 +53,7 @@ public class LoginResponseDTO {
 
     public String getEmployeeId()               { return employeeId;   }
     public void setEmployeeId(String id)        { this.employeeId = id; }
+
+    public Long getId()                         { return id;           }
+    public void setId(Long id)                  { this.id = id;        }
 }

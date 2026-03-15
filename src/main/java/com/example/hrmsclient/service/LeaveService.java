@@ -78,18 +78,22 @@ public class LeaveService {
         return toDTO(saved);
     }
 
+    @Transactional(readOnly = true)
     public PageResponseDTO<LeaveResponseDTO> getLeavesByEmployee(Long empId, int page, int size) {
         Page<LeaveRequest> result = leaveRequestRepository
             .findByEmployeeId(empId, PageRequest.of(page, size, Sort.by("createdAt").descending()));
         return PageResponseDTO.from(result.map(this::toDTO));
     }
 
+    @Transactional(readOnly = true)
     public PageResponseDTO<LeaveResponseDTO> getPendingLeaves(int page, int size) {
         Page<LeaveRequest> result = leaveRequestRepository
             .findByStatus(LeaveStatus.PENDING,
                 PageRequest.of(page, size, Sort.by("createdAt").ascending()));
         return PageResponseDTO.from(result.map(this::toDTO));
     }
+
+    @Transactional(readOnly = true)
     public PageResponseDTO<LeaveResponseDTO> getPendingLeavesForManager(
             String managerEmployeeId, int page, int size) {
 

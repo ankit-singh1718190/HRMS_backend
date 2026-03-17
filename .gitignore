@@ -39,4 +39,8 @@ application-local.properties
 .env.*
 !.env.example
 
-application-prod.properties
+# Do not commit real production config with secrets
+src/main/resources/application-prod.properties
+
+# Do not commit uploaded files
+uploads/

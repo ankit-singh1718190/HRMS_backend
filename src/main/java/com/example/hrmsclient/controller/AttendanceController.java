@@ -2,6 +2,7 @@ package com.example.hrmsclient.controller;
 
 import com.example.hrmsclient.dto.AttendanceRequestDTO;
 import com.example.hrmsclient.dto.CheckInRequestDTO;
+import com.example.hrmsclient.dto.EditAttendanceRequestDTO;
 import com.example.hrmsclient.entity.Attendance;
 import com.example.hrmsclient.service.AttendanceExcelService;
 import com.example.hrmsclient.service.AttendanceService;
@@ -34,13 +35,10 @@ public class AttendanceController {
         this.attendanceExcelService = attendanceExcelService;
     }
 
-    // ── Employee Self-Service ─────────────────────────────────────────────────
-
     @PostMapping("/checkin")
     public ResponseEntity<?> checkIn(
             @AuthenticationPrincipal UserDetails userDetails,
             @Valid @RequestBody CheckInRequestDTO request) {
-
         Attendance attendance = attendanceService.checkIn(userDetails.getUsername(), request);
         return ResponseEntity.ok(Map.of(
             "status",  "success",
@@ -48,10 +46,10 @@ public class AttendanceController {
             "data", Map.of(
                 "attendanceId", attendance.getId(),
                 "checkInTime",  attendance.getCheckIn().toString(),
-                "photoUrl",     attendance.getLoginPhotoUrl()      != null ? attendance.getLoginPhotoUrl()      : "",
-                "latitude",     attendance.getCheckInLatitude()    != null ? attendance.getCheckInLatitude()    : 0,
-                "longitude",    attendance.getCheckInLongitude()   != null ? attendance.getCheckInLongitude()   : 0,
-                "address",      attendance.getCheckInAddress()     != null ? attendance.getCheckInAddress()     : "N/A"
+                "photoUrl",     attendance.getLoginPhotoUrl()    != null ? attendance.getLoginPhotoUrl()    : "",
+                "latitude",     attendance.getCheckInLatitude()  != null ? attendance.getCheckInLatitude()  : 0,
+                "longitude",    attendance.getCheckInLongitude() != null ? attendance.getCheckInLongitude() : 0,
+                "address",      attendance.getCheckInAddress()   != null ? attendance.getCheckInAddress()   : "N/A"
             )
         ));
     }
@@ -72,9 +70,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/today")
-    public ResponseEntity<?> getTodayAttendance(
-            @AuthenticationPrincipal UserDetails userDetails) {
-
+    public ResponseEntity<?> getTodayAttendance(@AuthenticationPrincipal UserDetails userDetails) {
         Attendance attendance = attendanceService.getTodayAttendance(userDetails.getUsername());
         Map<String, Object> response = new HashMap<>();
         if (attendance == null) {
@@ -91,23 +87,19 @@ public class AttendanceController {
         data.put("latitude",      attendance.getCheckInLatitude());
         data.put("longitude",     attendance.getCheckInLongitude());
         data.put("address",       attendance.getCheckInAddress() != null ? attendance.getCheckInAddress() : "");
+        data.put("isEdited",      attendance.getLastEditedAt() != null);
+        data.put("editedByName",  attendance.getLastEditedByName() != null ? attendance.getLastEditedByName() : "");
+        data.put("editedAt",      attendance.getLastEditedAt() != null ? attendance.getLastEditedAt().toString() : "");
         response.put("status", "success");
         response.put("data",   data);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/date")
-    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getAttendanceByDate(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-
         List<Map<String, Object>> records = attendanceService.getAttendanceByDate(date);
-        return ResponseEntity.ok(Map.of(
-            "status", "success",
-            "date",   date.toString(),
-            "data",   records,
-            "total",  records.size()
-        ));
+        return ResponseEntity.ok(Map.of("status", "success", "date", date.toString(), "data", records, "total", records.size()));
     }
 
     @PostMapping("/manual")
@@ -127,72 +119,88 @@ public class AttendanceController {
         ));
     }
 
+    @PutMapping("/{id}/edit")
+    public ResponseEntity<?> editAttendance(
+            @PathVariable Long id,
+            @Valid @RequestBody EditAttendanceRequestDTO request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+
+        Attendance attendance = attendanceService.editAttendance(id, request, userDetails.getUsername());
+        return ResponseEntity.ok(Map.of(
+            "status",  "success",
+            "message", "Attendance updated successfully",
+            "data", Map.of(
+                "attendanceId",   attendance.getId(),
+                "date",           attendance.getAttendanceDate().toString(),
+                "newStatus",      attendance.getStatus().name(),
+                "originalStatus", attendance.getOriginalStatus() != null ? attendance.getOriginalStatus() : "N/A",
+                "editedBy",       attendance.getLastEditedByName(),
+                "editedByRole",   attendance.getLastEditedByRole(),
+                "editedAt",       attendance.getLastEditedAt().toString(),
+                "reason",         attendance.getEditReason(),
+                "editCount",      attendance.getEditCount()
+            )
+        ));
+    }
+
+    // ── EDIT HISTORY — Admin/HR only ──────────────────────────────────────────
+    // GET /api/attendance/edit-history?from=2026-03-01&to=2026-03-31
+    @GetMapping("/edit-history")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    public ResponseEntity<?> getEditHistory(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        List<Map<String, Object>> history = attendanceService.getAllEditHistory(from, to);
+        return ResponseEntity.ok(Map.of(
+            "status", "success",
+            "from",   from.toString(),
+            "to",     to.toString(),
+            "total",  history.size(),
+            "data",   history
+        ));
+    }
+
     @GetMapping("/report/daily")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<?> dailyReport(
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate reportDate = date != null ? date : LocalDate.now();
-        List<Map<String, Object>> report = attendanceService.getDailyReport(reportDate);
-        return ResponseEntity.ok(Map.of(
-            "status", "success",
-            "date",   reportDate.toString(),
-            "data",   report
-        ));
+        return ResponseEntity.ok(Map.of("status", "success", "date", reportDate.toString(),
+            "data", attendanceService.getDailyReport(reportDate)));
     }
 
     @GetMapping("/report/monthly")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<?> monthlyReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
-
-        List<Map<String, Object>> report = attendanceService.getMonthlyReport(month);
-        return ResponseEntity.ok(Map.of(
-            "status", "success",
-            "month",  month.toString(),
-            "data",   report
-        ));
+        return ResponseEntity.ok(Map.of("status", "success", "month", month.toString(),
+            "data", attendanceService.getMonthlyReport(month)));
     }
 
     @GetMapping("/export/daily")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<byte[]> exportDaily(
-            @RequestParam(required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws Exception {
-
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date)
+            throws Exception {
         LocalDate exportDate = date != null ? date : LocalDate.now();
         byte[] bytes = attendanceExcelService.exportDaily(exportDate);
-        String filename = "attendance_daily_"
-            + exportDate.format(DateTimeFormatter.ofPattern("dd-MM-yyyy")) + ".xlsx";
-        return excelResponse(bytes, filename);
+        return excelResponse(bytes, "attendance_daily_" + exportDate.format(DateTimeFormatter.ofPattern("dd-MM-yyyy")) + ".xlsx");
     }
 
     @GetMapping("/export/monthly")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<byte[]> exportMonthly(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month)
-            throws Exception {
-
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) throws Exception {
         byte[] bytes = attendanceExcelService.exportMonthly(month);
-        String filename = "attendance_monthly_"
-            + month.format(DateTimeFormatter.ofPattern("MM-yyyy")) + ".xlsx";
-        return excelResponse(bytes, filename);
+        return excelResponse(bytes, "attendance_monthly_" + month.format(DateTimeFormatter.ofPattern("MM-yyyy")) + ".xlsx");
     }
 
-    /**
-     * GET /api/attendance/export/yearly?year=2025
-     * Downloads yearly attendance as Excel (13 sheets: summary + one per month)
-     */
     @GetMapping("/export/yearly")
     @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<byte[]> exportYearly(@RequestParam int year) throws Exception {
-        byte[] bytes = attendanceExcelService.exportYearly(year);
-        String filename = "attendance_yearly_" + year + ".xlsx";
-        return excelResponse(bytes, filename);
+        return excelResponse(attendanceExcelService.exportYearly(year), "attendance_yearly_" + year + ".xlsx");
     }
 
-    // ── Helper 
     private ResponseEntity<byte[]> excelResponse(byte[] bytes, String filename) {
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")

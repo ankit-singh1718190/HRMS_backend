@@ -18,15 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-/**
- * Security Configuration for HRMS Application
- *
- * Role Hierarchy:
- *   ADMIN   → Full access to everything
- *   HR      → Employee management, leave approval, attendance, payroll view
- *   MANAGER → Team leave approval, attendance view, team member view
- *   EMPLOYEE→ Own profile, own attendance (check-in/out), own leaves, own payslip
- */
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
@@ -50,89 +42,13 @@ public class SecurityConfig {
         "/actuator/info"
     };
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN ONLY — Full system control
-    //   POST /api/admin/register      → Create admin accounts
-    //   GET  /api/admin/all           → List all admins
-    //   GET  /api/admin/{id}          → Get admin by id
-    //   PUT  /api/admin/{id}          → Update admin
-    //   PATCH /api/admin/{id}/toggle-active
-    //   DELETE /api/admin/{id}        → Delete admin
-    //   GET  /api/admin/stats         → Admin statistics
-    //   POST /api/employee/register   → Register new employee
-    //   DELETE /api/employee/{id}     → Hard delete employee
-    //   PUT  /api/employee/{id}/exit  → Mark employee exit
-    //   GET  /api/dashboard/admin-stats
-    //   POST /api/emails/broadcast    → Send broadcast emails
-    //   GET  /api/emails/logs         → Email audit logs
-    //   GET  /api/emails/logs/failed
-    //   GET  /api/emails/logs/search
-    // ─────────────────────────────────────────────────────────────────────────
     private static final String[] ADMIN_ONLY_URLS = {
         "/api/admin/**",
         "/api/dashboard/admin-stats",
         "/api/emails/**"
     };
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN + HR — Employee management & payroll
-    //   POST /api/employee/register
-    //   GET  /api/employee            → All employees
-    //   GET  /api/employee/search
-    //   GET  /api/employee/filter/**
-    //   GET  /api/employee/active
-    //   GET  /api/employee/exited
-    //   GET  /api/employee/departments
-    //   GET  /api/employee/dashboard
-    //   PUT  /api/employee/{id}       → Update employee
-    //   PUT  /api/employee/{id}/exit
-    //   DELETE /api/employee/{id}     → Delete employee
-    //   POST /api/payroll/**          → Generate / lock / process payroll
-    //   PUT  /api/payroll/**          → Approve / hold payroll
-    //   GET  /api/payroll/report
-    //   GET  /api/payroll/summary
-    //   GET  /api/payroll/locked
-    //   POST /api/dashboard/payroll/generate
-    //   PUT  /api/dashboard/payroll/{id}/approve
-    //   POST /api/dashboard/payroll/{id}/pay
-    //   DELETE /api/dashboard/employees/{id}
-    //   PUT  /api/dashboard/payroll/{id}/hold
-    //   POST /api/dashboard/payroll/{id}/retry
-    //   POST /api/attendance/manual   → Manual attendance entry
-    //   GET  /api/attendance/export/** → Excel exports
-    //   GET  /api/leaves/report/balance → Leave balance report
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ADMIN + HR + MANAGER — Operational management
-    //   GET  /api/dashboard/overview
-    //   GET  /api/dashboard/employees
-    //   GET  /api/dashboard/attendance
-    //   GET  /api/dashboard/departments
-    //   GET  /api/dashboard/payroll
-    //   PATCH /api/leaves/{id}/approve
-    //   PATCH /api/leaves/{id}/reject
-    //   GET  /api/leaves/employee/{empId}
-    //   GET  /api/leaves/pending
-    //   GET  /api/leaves/pending/manager/{managerEmployeeId}
-    //   GET  /api/attendance/report/daily
-    //   GET  /api/attendance/report/monthly
-    //   GET  /api/calendar/admin       → Admin calendar view
-    // ─────────────────────────────────────────────────────────────────────────
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ALL AUTHENTICATED — Every logged-in user
-    //   POST /api/attendance/checkin
-    //   POST /api/attendance/checkout
-    //   GET  /api/attendance/today
-    //   GET  /api/attendance/date
-    //   POST /api/leaves/apply
-    //   GET  /api/employee/{id}        → Own profile (service layer enforces ownership)
-    //   GET  /api/payroll/month        → Own payslip by month
-    //   GET  /api/payroll/employee/{employeeId}  → Own payslips
-    //   GET  /api/calendar/employee/{employeeId}
-    //   POST /api/upload/**            → Photo / document uploads
-    // ─────────────────────────────────────────────────────────────────────────
+ 
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -238,6 +154,9 @@ public class SecurityConfig {
                 .requestMatchers(
                     HttpMethod.GET, "/api/leaves/report/balance")
                     .hasAnyRole("ADMIN", "HR")
+                    
+                    .requestMatchers(HttpMethod.GET, "/api/attendance/edit-history")
+                    .hasAnyRole("ADMIN", "HR")
 
                 // ── 8. ADMIN + HR + MANAGER: Dashboard views ───────────────
                 .requestMatchers(HttpMethod.GET,
@@ -294,6 +213,9 @@ public class SecurityConfig {
                     "/api/attendance/today",
                     "/api/attendance/date")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+                    
+                    .requestMatchers(HttpMethod.PUT, "/api/attendance/{id}/edit")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
                 // ── 13. ALL AUTHENTICATED: Own leave ────────────────────────
                 .requestMatchers(
@@ -319,6 +241,8 @@ public class SecurityConfig {
                 // ── 18. ALL AUTHENTICATED: File uploads ──────────────────────
                 .requestMatchers("/api/upload/**")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+                    
+                .requestMatchers(HttpMethod.PUT, "/api/auth/update-password").authenticated()
 
                 // ── 19. Deny anything else not matched above ─────────────────
                 .anyRequest().authenticated()
@@ -331,7 +255,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /** Plain-text passwords (no hashing). Use only for local/dev; enable BCrypt for production. */
+   
     @Bean
     public PasswordEncoder passwordEncoder() {
         return NoOpPasswordEncoder.getInstance();
@@ -343,16 +267,10 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    /**
-     * CORS: Restrict to known frontend origins in production.
-     * Replace the allowedOriginPattern wildcard with your actual frontend URL
-     * e.g. "https://your-app.vercel.app" before deploying to production.
-     */
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        // TODO: Replace "*" with explicit frontend origin(s) in production
         configuration.addAllowedOriginPattern("*");
         configuration.addAllowedHeader("*");
         configuration.addAllowedMethod("*");

@@ -33,6 +33,11 @@ public class EmailService {
 
 	@Value("${app.mail.from-name}")
 	private String fromName;
+	@Value("${app.company.name}")
+	private String companyName;
+
+	@Value("${app.company.url}")
+	private String companyUrl;
 
 	public EmailService(JavaMailSender mailSender, TemplateEngine templateEngine, PayslipPdfService payslipPdfService) {
 		this.mailSender = mailSender;
@@ -81,6 +86,8 @@ public class EmailService {
 		try {
 			Context context = new Context();
 			context.setVariables(variables);
+			 context.setVariable("companyName", companyName); 
+		     context.setVariable("companyUrl",  companyUrl);
 			String html = templateEngine.process(templateName, context);
 			sendHtmlEmail(to, subject, html);
 		} catch (Exception e) {
@@ -182,7 +189,9 @@ public class EmailService {
 	            Map.entry("paymentRef",       payroll.getPaymentReference() != null
 	                                            ? payroll.getPaymentReference() : "N/A"),
 	            Map.entry("paymentMode",      payroll.getPaymentMode() != null
-	                                            ? payroll.getPaymentMode() : "NEFT")
+	                                            ? payroll.getPaymentMode() : "NEFT"),
+	            Map.entry("companyName",      companyName), 
+	            Map.entry("companyUrl",       companyUrl) 
 	        );
 
 	        // Step 2: Render Thymeleaf template → HTML
@@ -190,10 +199,10 @@ public class EmailService {
 	        context.setVariables(vars);
 	        String htmlContent = templateEngine.process("email/payslip-email", context);
 
-	        // Step 3: Generate PDF payslip
+	       
 	        File pdfFile = payslipPdfService.generatePayslip(payroll);
 
-	        // Step 4: Send HTML email + PDF attached
+	        
 	        MimeMessage message = mailSender.createMimeMessage();
 	        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 	        helper.setFrom(fromEmail, fromName);
@@ -219,35 +228,37 @@ public class EmailService {
 
 	@Async
 	public void sendForm16AvailableNotification(Employee employee, String financialYear) {
-		try {
-			MimeMessage message = mailSender.createMimeMessage();
-			MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
+	    try {
+	        MimeMessage message = mailSender.createMimeMessage();
+	        MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
 
-			helper.setFrom(fromEmail, fromName);
-			helper.setTo(employee.getEmailId());
-			helper.setSubject("Your Form 16 for FY " + financialYear + " is now available");
+	        helper.setFrom(fromEmail, fromName);
+	        helper.setTo(employee.getEmailId());
+	        helper.setSubject("Your Form 16 for FY " + financialYear + " is now available");
 
-			String body = "Dear " + employee.getFirstName() + ",\n\n"
-					+ "Your Form 16 for Financial Year " + financialYear + " has been uploaded by HR\n"
-					+ "and is now available for download from your HRMS portal.\n\n"
-					+ "HOW TO DOWNLOAD:\n"
-					+ "1. Login to your Employee Dashboard\n"
-					+ "2. Go to: My Documents > Form 16\n"
-					+ "3. Click Download next to FY " + financialYear + "\n\n"
-					+ "You will need Form 16 to file your Income Tax Return (ITR).\n\n"
-					+ "For any queries, please contact HR at " + fromEmail + ".\n\n"
-					+ "Regards,\n"
-					+ "HR Team\n"
-					+ fromName;
+	        // ✅ REPLACE the old String body with this:
+	        String body = "Dear " + employee.getFirstName() + ",\n\n"
+	                + "Your Form 16 for Financial Year " + financialYear + " has been uploaded by HR\n"
+	                + "and is now available for download from your HRMS portal.\n\n"
+	                + "HOW TO DOWNLOAD:\n"
+	                + "1. Login: " + companyUrl + "\n"
+	                + "2. Go to: My Documents > Form 16\n"
+	                + "3. Click Download next to FY " + financialYear + "\n\n"
+	                + "You will need Form 16 to file your Income Tax Return (ITR).\n\n"
+	                + "For any queries, please contact HR at " + fromEmail + ".\n\n"
+	                + "Regards,\n"
+	                + "HR Team\n"
+	                + companyName;  // ← was fromName, now uses companyName from properties
 
-			helper.setText(body, false);
-			mailSender.send(message);
+	        helper.setText(body, false);
+	        mailSender.send(message);
 
-			log.info("Form 16 availability notification sent to " + employee.getEmailId());
+	        log.info("Form 16 availability notification sent to " + employee.getEmailId());
 
-		} catch (Exception e) {
-			log.severe("Failed to send Form 16 notification to " + employee.getEmailId() + ": " + e.getMessage());
-		}
+	    } catch (Exception e) {
+	        log.severe("Failed to send Form 16 notification to " + employee.getEmailId() + ": " + e.getMessage());
+	    }
 	}
+	
 
 }

@@ -32,10 +32,6 @@ public class LeaveBalanceService {
         this.employeeRepo = employeeRepo;
     }
 
-    // =====================================================================
-    // Allocate Leave Balance (Admin / HR)
-    // =====================================================================
-
     @Transactional
     public LeaveBalanceResponseDTO allocate(LeaveBalanceRequestDTO dto) {
 
@@ -73,10 +69,6 @@ public class LeaveBalanceService {
         return toDto(saved);
     }
 
-    // =====================================================================
-    // Employee Leave Summary
-    // =====================================================================
-
     public LeaveBalanceSummaryDTO getSummary(Long empId, int year) {
 
         Employee employee = employeeRepo.findByIdAndDeletedFalse(empId)
@@ -104,10 +96,6 @@ public class LeaveBalanceService {
         );
     }
 
-    // =====================================================================
-    // Get Specific Leave Balance
-    // =====================================================================
-
     public LeaveBalanceResponseDTO getBalance(Long empId,
                                               String leaveType,
                                               int year,
@@ -122,11 +110,6 @@ public class LeaveBalanceService {
 
         return toDto(balance);
     }
-
-    // =====================================================================
-    // Deduct Leave Days
-    // =====================================================================
-
     @Transactional
     public LeaveDeductionResultDTO deductDays(Long empId,
                                               String leaveType,
@@ -164,10 +147,6 @@ public class LeaveBalanceService {
         return new LeaveDeductionResultDTO(paid, unpaid);
     }
 
-    // =====================================================================
-    // Restore Leave Days (Cancel Leave)
-    // =====================================================================
-
     @Transactional
     public void restoreDays(Long empId,
                             String leaveType,
@@ -196,11 +175,6 @@ public class LeaveBalanceService {
                     empId, paidDays, unpaidDays);
         });
     }
-
-    // =====================================================================
-    // Validation
-    // =====================================================================
-
     private void validateAllocation(LeaveBalanceRequestDTO dto) {
 
         if (dto.getEmployeeId() == null) {
@@ -215,10 +189,6 @@ public class LeaveBalanceService {
             throw new IllegalArgumentException("TotalAllocated cannot be negative");
         }
     }
-
-    // =====================================================================
-    // Private Helpers
-    // =====================================================================
 
     private LeaveBalance createNewBalance(Employee employee, LeaveBalanceRequestDTO dto) {
 

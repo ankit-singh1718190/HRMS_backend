@@ -26,43 +26,25 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String emailId) throws UsernameNotFoundException {
 
-        // Check Admin first
+        // ── Admin: still uses a generic wrapper (Admin does not implement UserDetails)
         Admin admin = adminRepository.findByEmailId(emailId).orElse(null);
 
         if (admin != null) {
             String roleValue = admin.getRole() != null
                     ? admin.getRole().toUpperCase().replace(" ", "_")
                     : "ADMIN";
-            SimpleGrantedAuthority authority =
-                    new SimpleGrantedAuthority("ROLE_" + roleValue);
 
             return User.builder()
                     .username(admin.getEmailId())
                     .password(admin.getPassword())
-                    .authorities(List.of(authority))
+                    .authorities(List.of(new SimpleGrantedAuthority("ROLE_" + roleValue)))
                     .build();
         }
 
-        // Check Employee
-        Employee employee = employeeRepository.findByEmailId(emailId)
+      
+        return employeeRepository
+                .findByEmailIdAndDeletedFalse(emailId)
                 .orElseThrow(() ->
                         new UsernameNotFoundException("User not found with email: " + emailId));
-
-        String roleValue = employee.getRole() != null
-                ? employee.getRole().toUpperCase()
-                : "EMPLOYEE";
-
-        SimpleGrantedAuthority authority =
-                new SimpleGrantedAuthority("ROLE_" + roleValue);
-
-        return User.builder()
-                .username(employee.getEmailId())
-                .password(employee.getPassword())
-                .authorities(List.of(authority))
-                .accountExpired(false)
-                .accountLocked(employee.isDeleted())
-                .credentialsExpired(false)
-                .disabled(false)
-                .build();
     }
 }

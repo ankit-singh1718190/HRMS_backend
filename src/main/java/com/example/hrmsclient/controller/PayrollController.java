@@ -5,6 +5,10 @@ import com.example.hrmsclient.entity.Payroll;
 import com.example.hrmsclient.entity.PayrollStatus;
 import com.example.hrmsclient.repository.PayrollRepository;
 import com.example.hrmsclient.service.PayrollService;
+import com.lowagie.text.Document;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.pdf.PdfWriter;
+
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,6 +21,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,7 +73,7 @@ public class PayrollController {
 
     // ── NEW: Check if Month is Locked
     @GetMapping("/locked")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> isMonthLocked(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
         boolean locked = payrollService.isMonthLocked(month);
@@ -81,16 +86,26 @@ public class PayrollController {
 
     // ── NEW: Monthly Payroll Report 
     @GetMapping("/report")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getPayrollReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String employeeId,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String employeeType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
 
-        List<Map<String, Object>> report = payrollService.getPayrollReport(month);
+        Page<Map<String, Object>> report =
+            payrollService.getPayrollReport(month, name, employeeId, department, employeeType, page, size);
+
         return ResponseEntity.ok(Map.of(
             "status", "success",
-            "month",  month.toString(),
-            "data",   report,
-            "total",  report.size()
+            "data", report.getContent(),
+            "totalRecords", report.getTotalElements(),
+            "totalPages", report.getTotalPages(),
+            "currentPage", report.getNumber()
         ));
     }
 
@@ -196,7 +211,7 @@ public class PayrollController {
 
     // ── GET by Month 
     @GetMapping("/month")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     @Transactional(readOnly = true)
     public ResponseEntity<?> getPayrollByMonth(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
@@ -227,7 +242,7 @@ public class PayrollController {
 
     // ── GET Summary
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getPayrollSummary(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
 
@@ -245,6 +260,30 @@ public class PayrollController {
                 "isLocked",      payrollService.isMonthLocked(month)
             )
         ));
+    }
+    // payslip
+    @GetMapping("/{id}/payslip")
+    public ResponseEntity<byte[]> downloadPayslip(@PathVariable Long id) throws Exception {
+
+        Payroll payroll = payrollRepository.findByIdWithEmployee(id)
+                .orElseThrow(() -> new RuntimeException("Payroll not found"));
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        Document document = new Document();
+        PdfWriter.getInstance(document, out);
+
+        document.open();
+        document.add(new Paragraph("Payslip"));
+        document.add(new Paragraph("Employee: " + payroll.getEmployee().getFullName()));
+        document.add(new Paragraph("Month: " + payroll.getPayrollMonth()));
+        document.add(new Paragraph("Net Salary: ₹" + payroll.getNetSalary()));
+        document.close();
+
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=payslip_" + id + ".pdf")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(out.toByteArray());
     }
 
     // ── Helper 

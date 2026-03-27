@@ -101,13 +101,12 @@ public class PayrollService {
         return saved;
     }
 
-    // ── NEW: Lock Month ────────────────────────────────────────────────────────
+    // ── NEW: Lock Month 
    
     @Transactional
     public int lockMonth(LocalDate month, String lockedBy) {
-        List<Payroll> payrolls = payrollRepository
-            .findByPayrollMonthAndStatusIn(month,
-                List.of(PayrollStatus.PAID, PayrollStatus.APPROVED));
+    	List<Payroll> payrolls =
+    		    payrollRepository.findByPayrollMonthWithEmployee(month);
 
         for (Payroll p : payrolls) {
             p.setStatus(PayrollStatus.LOCKED);
@@ -125,10 +124,8 @@ public class PayrollService {
     // ── NEW: Monthly Payroll Report
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getPayrollReport(LocalDate month) {
-        List<Payroll> payrolls = payrollRepository
-            .findByPayrollMonth(month,
-                PageRequest.of(0, Integer.MAX_VALUE, Sort.by("employee.firstName")))
-            .getContent();
+    	List<Payroll> payrolls =
+    		    payrollRepository.findByPayrollMonthWithEmployee(month);
 
         List<Map<String, Object>> report = new ArrayList<>();
         for (Payroll p : payrolls) {
@@ -342,5 +339,43 @@ public class PayrollService {
 
     private BigDecimal safe(BigDecimal v) {
         return v != null ? v : BigDecimal.ZERO;
+    }
+    public Page<Map<String, Object>> getPayrollReport(
+            LocalDate month,
+            String name,
+            String employeeId,
+            String department,
+            String employeeType,
+            int page,
+            int size
+    ) {
+        List<Map<String, Object>> fullList = getPayrollReport(month); // existing
+
+        List<Map<String, Object>> filtered = fullList.stream()
+            .filter(row ->
+                (name == null || name.isEmpty() ||
+                    row.get("employeeName").toString().toLowerCase().contains(name.toLowerCase()))
+            )
+            .filter(row ->
+                (employeeId == null || employeeId.isEmpty() ||
+                    row.get("employeeId").toString().toLowerCase().contains(employeeId.toLowerCase()))
+            )
+            .filter(row ->
+                (department == null || department.isEmpty() ||
+                    row.get("department").toString().toLowerCase().contains(department.toLowerCase()))
+            )
+            .filter(row ->
+                (employeeType == null || employeeType.isEmpty() ||
+                    row.get("employeeType").toString().equalsIgnoreCase(employeeType))
+            )
+            .toList();
+
+        int start = page * size;
+        int end = Math.min(start + size, filtered.size());
+
+        List<Map<String, Object>> pageContent =
+            start > filtered.size() ? List.of() : filtered.subList(start, end);
+
+        return new PageImpl<>(pageContent, PageRequest.of(page, size), filtered.size());
     }
 }

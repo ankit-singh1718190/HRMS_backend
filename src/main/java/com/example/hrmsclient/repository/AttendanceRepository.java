@@ -43,6 +43,9 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     @Query("SELECT a FROM Attendance a JOIN FETCH a.employee " +
             "WHERE a.attendanceDate = :date")
      List<Attendance> findByAttendanceDateWithEmployee(@Param("date") LocalDate date);
+  
+    long countByAttendanceDate(LocalDate attendanceDate);
+    long countByEmployeeManagerIdAndAttendanceDate(Long managerId, LocalDate attendanceDate);
     
     
 }

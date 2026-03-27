@@ -17,21 +17,17 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 
     Page<LeaveRequest> findByEmployeeId(Long empId, Pageable pageable);
     Page<LeaveRequest> findByStatus(LeaveStatus status, Pageable pageable);
-
-    // NEW: Pending leaves where employee belongs to a specific manager
     Page<LeaveRequest> findByStatusAndEmployeeIdIn(
-        LeaveStatus status, List<Long> employeeIds, Pageable pageable);
+            LeaveStatus status, List<Long> employeeIds, Pageable pageable);
 
-    // NEW: Count pending leaves that have a reporting manager (for dashboard tile)
     @Query("""
-        SELECT COUNT(lr) FROM LeaveRequest lr
+        SELECT COUNT(lr)
+        FROM LeaveRequest lr
         WHERE lr.status = 'PENDING'
-          AND lr.employee.reportingManager IS NOT NULL
-          AND lr.employee.reportingManager <> ''
+          AND lr.employee.manager IS NOT NULL
     """)
     long countPendingLeavesWithReportingManager();
 
-    // NEW: Count approved leaves by type in a date range (for leave balance report)
     @Query("""
         SELECT COUNT(lr) FROM LeaveRequest lr
         WHERE lr.employee.id = :empId
@@ -41,27 +37,71 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
           AND lr.endDate   <= :to
     """)
     long countApprovedLeavesByType(
-        @Param("empId")     Long empId,
-        @Param("leaveType") String leaveType,
-        @Param("from")      LocalDate from,
-        @Param("to")        LocalDate to);
-    @Query("""
-            SELECT lr FROM LeaveRequest lr
-            WHERE lr.employee.id = :empId
-              AND lr.startDate >= :from
-              AND lr.endDate   <= :to
-        """)
-        List<LeaveRequest> findByEmployeeIdAndDateRange(
             @Param("empId") Long empId,
-            @Param("from")  LocalDate from,
-            @Param("to")    LocalDate to);
-
-        @Query("""
-            SELECT lr FROM LeaveRequest lr
-            WHERE lr.startDate >= :from
-              AND lr.endDate   <= :to
-        """)
-        List<LeaveRequest> findAllByDateRange(
+            @Param("leaveType") String leaveType,
             @Param("from") LocalDate from,
-            @Param("to")   LocalDate to);
+            @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT lr FROM LeaveRequest lr
+        WHERE lr.employee.id = :empId
+          AND lr.startDate >= :from
+          AND lr.endDate   <= :to
+    """)
+    List<LeaveRequest> findByEmployeeIdAndDateRange(
+            @Param("empId") Long empId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    @Query("""
+        SELECT lr FROM LeaveRequest lr
+        WHERE lr.startDate >= :from
+          AND lr.endDate   <= :to
+    """)
+    List<LeaveRequest> findAllByDateRange(
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    long countByEmployeeManagerIdAndStatus(Long managerId, LeaveStatus status);
+    long countByStatus(LeaveStatus status);
+
+    // ── ADMIN / HR — filter by status, leaveType, employeeName (no employee restriction) ──
+    @Query("""
+        SELECT l FROM LeaveRequest l
+        WHERE (:status IS NULL OR l.status = :status)
+          AND (:leaveType IS NULL OR l.leaveType = :leaveType)
+          AND (:employeeName IS NULL OR
+               LOWER(CONCAT(
+                   COALESCE(l.employee.firstName, ''), ' ',
+                   COALESCE(l.employee.lastName, '')
+               ))
+               LIKE LOWER(CONCAT('%', :employeeName, '%')))
+    """)
+    Page<LeaveRequest> findWithFilters(
+            @Param("status") LeaveStatus status,
+            @Param("leaveType") String leaveType,
+            @Param("employeeName") String employeeName,
+            Pageable pageable
+    );
+
+    // ── MANAGER — same filters but restricted to their team's employee IDs ────
+    @Query("""
+        SELECT l FROM LeaveRequest l
+        WHERE l.employee.id IN :employeeIds
+          AND (:status IS NULL OR l.status = :status)
+          AND (:leaveType IS NULL OR l.leaveType = :leaveType)
+          AND (:employeeName IS NULL OR
+               LOWER(CONCAT(
+                   COALESCE(l.employee.firstName, ''), ' ',
+                   COALESCE(l.employee.lastName, '')
+               ))
+               LIKE LOWER(CONCAT('%', :employeeName, '%')))
+    """)
+    Page<LeaveRequest> findWithFiltersAndEmployeeIds(
+            @Param("status") LeaveStatus status,
+            @Param("leaveType") String leaveType,
+            @Param("employeeName") String employeeName,
+            @Param("employeeIds") List<Long> employeeIds,
+            Pageable pageable
+    );
 }

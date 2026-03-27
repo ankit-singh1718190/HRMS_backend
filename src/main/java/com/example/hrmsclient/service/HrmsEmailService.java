@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.io.File;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -109,24 +110,30 @@ public class HrmsEmailService {
     }
 
     @Async
-    public void sendLeaveApprovedEmail(LeaveRequest leave) {
+    public void sendLeaveApprovedEmailAsync(
+            String email,
+            String name,
+            LocalDate startDate,
+            LocalDate endDate,
+            String leaveType,
+            String approvedBy
+    ) {
         try {
-            Employee emp = leave.getEmployee();
             Map<String, Object> vars = new HashMap<>();
-            vars.put("employeeName", emp.getFullName());
-            vars.put("leaveType",    leave.getLeaveType());
-            vars.put("startDate",    leave.getStartDate().format(DATE_FMT));
-            vars.put("endDate",      leave.getEndDate().format(DATE_FMT));
-            vars.put("totalDays",    leave.getLeaveDays());
-            vars.put("approvedBy",   leave.getApprovedBy());
-            vars.put("companyName",  companyName);
+            vars.put("employeeName", name);
+            vars.put("leaveType", leaveType);
+            vars.put("startDate", startDate.format(DATE_FMT));
+            vars.put("endDate", endDate.format(DATE_FMT));
+            vars.put("approvedBy", approvedBy);
+            vars.put("companyName", companyName);
 
             emailService.sendTemplatedEmailAsync(
-                emp.getEmailId(),
-                "Leave Approved — " + leave.getLeaveType(),
+                email,
+                "Leave Approved — " + leaveType,
                 "email/leave-approved",
                 vars
             );
+
         } catch (Exception e) {
             log.severe("Failed to send leave approved email: " + e.getMessage());
         }

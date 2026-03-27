@@ -83,7 +83,8 @@ public class Form16UploadService {
                     }
 
                     // Look up employee
-                    Optional<Employee> empOpt = employeeRepository.findByEmployeeId(employeeId);
+                    Optional<Employee> empOpt = employeeRepository
+                            .findByEmployeeIdAndDeletedFalse(employeeId);
                     if (empOpt.isEmpty()) {
                         errors.add(fileName + " — Employee ID not found: " + employeeId);
                         failed++;

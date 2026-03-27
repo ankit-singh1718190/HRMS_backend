@@ -62,8 +62,9 @@ public class AuthService {
                         admin.getAdminId()
                 ))
                 .orElseGet(() -> {
-                    Employee employee = employeeRepository.findByEmailId(request.getEmailId())
-                            .orElseThrow(() -> new BadCredentialsException("User not found"));
+                	Employee employee = employeeRepository
+                	        .findByEmailIdAndDeletedFalse(request.getEmailId())
+                	        .orElseThrow(() -> new BadCredentialsException("User not found"));
 
                     return new LoginResponseDTO(
                             accessToken,

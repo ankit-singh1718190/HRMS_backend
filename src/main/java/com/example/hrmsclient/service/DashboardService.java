@@ -90,7 +90,7 @@ public class DashboardService {
             EmploymentStatus s = EmploymentStatus.valueOf(f.getEmploymentStatus().toUpperCase());
             return employeeRepository.findByEmploymentStatusAndDeletedFalse(s, pg);
         }
-        return employeeRepository.findByDeletedFalse(pg);
+        return employeeRepository.findAllByDeletedFalse(pg);
     }
 
     // ── Attendance with Filters 
@@ -111,12 +111,17 @@ public class DashboardService {
 
     // ── Department Breakdown 
     public Map<String, Long> getDepartmentBreakdown() {
-        List<Employee> all = employeeRepository.findByDeletedFalse(
-            PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+
+        List<Employee> all = employeeRepository
+                .findAllByDeletedFalse(Pageable.unpaged())
+                .getContent();
+
         Map<String, Long> breakdown = new LinkedHashMap<>();
+
         for (Employee e : all) {
             breakdown.merge(e.getDepartment(), 1L, Long::sum);
         }
+
         return breakdown;
     }
 

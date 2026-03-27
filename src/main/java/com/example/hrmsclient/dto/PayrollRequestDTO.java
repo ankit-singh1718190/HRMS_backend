@@ -3,20 +3,6 @@ package com.example.hrmsclient.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-/**
- * NEW: PayrollRequestDTO
- *
- * Used by admin to set/update salary components for an active employee
- * for a given payroll month.
- *
- * Auto-calculated fields (set by PayrollCalculationService, not by admin):
- *   - weekendWorkAmount  (= basicSalary/26 * weekendWorkDays)
- *   - pfEmployee         (= 12% of basicSalary)
- *   - professionalTax    (= slab based on gross)
- *   - grossSalary        (= sum of all earnings)
- *   - totalDeductions    (= sum of all deductions)
- *   - netSalary          (= gross - totalDeductions)
- */
 public class PayrollRequestDTO {
 
     private Long       employeeId;      

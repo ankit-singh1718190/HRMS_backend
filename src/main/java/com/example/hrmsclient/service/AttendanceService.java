@@ -9,6 +9,8 @@ import com.example.hrmsclient.repository.AttendanceRepository;
 import com.example.hrmsclient.repository.EmployeeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,11 @@ public class AttendanceService {
         this.employeeRepository     = employeeRepository;
         this.adminRepository        = adminRepository;
         this.attendanceEmailService = attendanceEmailService;
+    }
+
+    // ── Helper: resolve role safely ───────────────────────────────────────────
+    private boolean isManager(Employee user) {
+        return user != null && "MANAGER".equalsIgnoreCase(user.getRole());
     }
 
     // ── Employee Self Check-In ────────────────────────────────────────────────
@@ -103,7 +110,7 @@ public class AttendanceService {
         return saved;
     }
 
-    // ── EDIT ATTENDANCE WITH FULL AUDIT TRAIL ────────────────────────────────
+    // ── Edit Attendance with Full Audit Trail ─────────────────────────────────
     @Transactional
     public Attendance editAttendance(Long attendanceId,
                                      EditAttendanceRequestDTO request,
@@ -157,13 +164,17 @@ public class AttendanceService {
         return saved;
     }
 
-    // ── Get ALL edited records — Admin view ───────────────────────────────────
+    // ── Get ALL edited records — scoped by role ───────────────────────────────
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getAllEditHistory(LocalDate from, LocalDate to) {
+    public List<Map<String, Object>> getAllEditHistory(LocalDate from, LocalDate to, Employee user) {
         return attendanceRepository
-            .findEditedAttendanceWithEmployee(from, to) // ← JOIN FETCH fixes lazy load
+            .findEditedAttendanceWithEmployee(from, to)
             .stream()
             .filter(a -> a.getLastEditedAt() != null)
+            // MANAGER: show only edits belonging to their team
+            .filter(a -> !isManager(user) ||
+                    (a.getEmployee().getManager() != null &&
+                     a.getEmployee().getManager().getId().equals(user.getId())))
             .sorted(Comparator.comparing(Attendance::getLastEditedAt).reversed())
             .map(a -> {
                 Map<String, Object> row = new LinkedHashMap<>();
@@ -187,12 +198,21 @@ public class AttendanceService {
             .collect(Collectors.toList());
     }
 
-    // ── Get Attendance by Date ────────────────────────────────────────────────
-    public List<Map<String, Object>> getAttendanceByDate(LocalDate date) {
-        List<Employee> activeEmployees = employeeRepository
-            .findByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE,
-                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE))
-            .getContent();
+    public List<Map<String, Object>> getAttendanceByDate(LocalDate date, Employee user) {
+
+        List<Employee> activeEmployees;
+        if (isManager(user)) {
+            activeEmployees = employeeRepository
+                .findByManagerIdAndEmploymentStatusAndDeletedFalse(
+                        user.getId(), EmploymentStatus.ACTIVE,
+                        PageRequest.of(0, Integer.MAX_VALUE))
+                .getContent();
+        } else {
+            activeEmployees = employeeRepository
+                .findByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE,
+                        PageRequest.of(0, Integer.MAX_VALUE))
+                .getContent();
+        }
 
         List<Attendance> records = attendanceRepository.findByAttendanceDateWithEmployee(date);
         Map<Long, Attendance> recordMap = records.stream()
@@ -237,23 +257,61 @@ public class AttendanceService {
         return result;
     }
 
-    // ── Daily / Monthly Reports ───────────────────────────────────────────────
-    public List<Map<String, Object>> getDailyReport(LocalDate date) {
-        return getAttendanceByDate(date);
+    public List<Map<String, Object>> getDailyReport(
+            LocalDate date,
+            String name,
+            String employeeId,
+            String department,
+            String employeeType,
+            Employee user          
+    ) {
+        // getAttendanceByDate already applies the manager filter
+        List<Map<String, Object>> data = getAttendanceByDate(date, user);
+
+        return data.stream()
+            .filter(row ->
+                (name == null || name.isEmpty() ||
+                    row.get("employeeName").toString().toLowerCase().contains(name.toLowerCase()))
+            )
+            .filter(row ->
+                (employeeId == null || employeeId.isEmpty() ||
+                    row.get("employeeId").toString().toLowerCase().contains(employeeId.toLowerCase()))
+            )
+            .filter(row ->
+                (department == null || department.isEmpty() ||
+                    row.get("department").toString().toLowerCase().contains(department.toLowerCase()))
+            )
+            .filter(row ->
+                (employeeType == null || employeeType.isEmpty() ||
+                    row.get("employeeType").toString().equalsIgnoreCase(employeeType))
+            )
+            .collect(Collectors.toList());
     }
 
-    public List<Map<String, Object>> getMonthlyReport(LocalDate month) {
+   
+    public List<Map<String, Object>> getMonthlyReport(LocalDate month, Employee user) {
         YearMonth ym    = YearMonth.of(month.getYear(), month.getMonth());
         LocalDate start = ym.atDay(1);
         LocalDate end   = ym.atEndOfMonth();
 
-        List<Employee> employees = employeeRepository
-            .findByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE,
-                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE))
-            .getContent();
+        // MANAGER: only their assigned active employees
+        // ADMIN/HR: all active employees
+        List<Employee> employees;
+        if (isManager(user)) {
+            employees = employeeRepository
+                .findByManagerIdAndEmploymentStatusAndDeletedFalse(
+                        user.getId(), EmploymentStatus.ACTIVE,
+                        PageRequest.of(0, Integer.MAX_VALUE))
+                .getContent();
+        } else {
+            employees = employeeRepository
+                .findByEmploymentStatusAndDeletedFalse(EmploymentStatus.ACTIVE,
+                        PageRequest.of(0, Integer.MAX_VALUE))
+                .getContent();
+        }
 
         List<Attendance> allRecords = attendanceRepository
-            .findByAttendanceDateBetween(start, end, org.springframework.data.domain.Pageable.unpaged())
+            .findByAttendanceDateBetween(start, end, Pageable.unpaged())
             .getContent();
 
         Map<Long, List<Attendance>> byEmp = allRecords.stream()
@@ -262,7 +320,9 @@ public class AttendanceService {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Employee emp : employees) {
             List<Attendance> empRecs = byEmp.getOrDefault(emp.getId(), Collections.emptyList());
-            long present = empRecs.stream().filter(a -> a.getStatus() == AttendanceStatus.PRESENT || a.getStatus() == AttendanceStatus.WORK_FROM_HOME).count();
+            long present = empRecs.stream().filter(a ->
+                a.getStatus() == AttendanceStatus.PRESENT ||
+                a.getStatus() == AttendanceStatus.WORK_FROM_HOME).count();
             long halfDay = empRecs.stream().filter(a -> a.getStatus() == AttendanceStatus.HALF_DAY).count();
             long onLeave = empRecs.stream().filter(a -> a.getStatus() == AttendanceStatus.ON_LEAVE).count();
             long absent  = empRecs.stream().filter(a -> a.getStatus() == AttendanceStatus.ABSENT).count();
@@ -285,7 +345,7 @@ public class AttendanceService {
         return result;
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
+   
     private Employee getEmployeeByEmail(String email) {
         return employeeRepository.findByEmailIdAndDeletedFalse(email)
             .orElseThrow(() -> new RuntimeException("Employee not found: " + email));

@@ -18,7 +18,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
@@ -30,53 +29,44 @@ public class SecurityConfig {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PUBLIC — No authentication required
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Public — no auth needed ───────────────────────────────────────────────
     private static final String[] PUBLIC_URLS = {
-        "/api/auth/login",            // Login for all roles
-        "/api/auth/forgot-password",  // Password reset request
-        "/api/auth/reset-password",   // Password reset confirm
-        "/actuator/health",           // Health check
+        "/api/auth/login",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
+        "/actuator/health",
         "/actuator/health/**",
         "/actuator/info"
     };
 
+    // ── ADMIN-only (user management, email logs) ──────────────────────────────
     private static final String[] ADMIN_ONLY_URLS = {
-        "/api/admin/**",
+        "/api/admin/**",          // Admin user CRUD — ADMIN only
         "/api/dashboard/admin-stats",
         "/api/emails/**"
     };
 
- 
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // JWT is stateless — CSRF not needed
             .csrf(csrf -> csrf.disable())
-
-            // Wire CORS bean defined below
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-            // No HTTP sessions — every request carries JWT
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
             .authorizeHttpRequests(auth -> auth
 
-                // ── 1. PUBLIC ──────────────────────────────────────────────
+                // ── 1. PUBLIC ─────────────────────────────────────────────────
                 .requestMatchers(PUBLIC_URLS).permitAll()
 
-                // ── 2. ADMIN ONLY ──────────────────────────────────────────
-                .requestMatchers(ADMIN_ONLY_URLS)
-                    .hasRole("ADMIN")
+                // ── 2. ADMIN ONLY (admin user management & email logs) ─────────
+                .requestMatchers(ADMIN_ONLY_URLS).hasRole("ADMIN")
 
-                // ── 3. ADMIN + HR: Employee CRUD ───────────────────────────
-                .requestMatchers(
-                    HttpMethod.POST,   "/api/employee/register")
+                // ── 3. Employee CRUD: create ───────────────────────────────────
+                .requestMatchers(HttpMethod.POST, "/api/employee/register")
                     .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR")
 
+                // ── 4. Employee READ: ADMIN + HR + MANAGER ─────────────────────
                 .requestMatchers(HttpMethod.GET,
                     "/api/employee",
                     "/api/employee/search",
@@ -87,35 +77,26 @@ public class SecurityConfig {
                     "/api/employee/dashboard")
                     .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER")
 
-                .requestMatchers(
-                    HttpMethod.PUT,    "/api/employee/{id}")
+                // ── 5. Employee UPDATE / DELETE: ADMIN + HR ────────────────────
+                .requestMatchers(HttpMethod.PUT,    "/api/employee/{id}")
                     .hasAnyRole("ADMIN", "HR")
-
                 .requestMatchers(HttpMethod.PUT,    "/api/employee/{id}/exit")
                     .hasAnyRole("ADMIN", "HR")
-
                 .requestMatchers(HttpMethod.DELETE, "/api/employee/{id}")
                     .hasAnyRole("ADMIN", "HR")
 
-                // ── 4. ADMIN + HR: Payroll management ──────────────────────
+                // ── 6. Payroll WRITE: ADMIN + HR only ─────────────────────────
                 .requestMatchers(HttpMethod.POST,
                     "/api/payroll/save",
-                    "/api/payroll/lock",
                     "/api/payroll/generate",
                     "/api/payroll/process-all")
                     .hasAnyRole("ADMIN", "HR")
 
-                .requestMatchers(HttpMethod.PUT,
-                    "/api/payroll/approve-all")
-                    .hasAnyRole("ADMIN", "HR")
-
-                .requestMatchers(HttpMethod.GET,
-                    "/api/payroll/locked",
-                    "/api/payroll/report",
-                    "/api/payroll/summary")
-                    .hasAnyRole("ADMIN", "HR")
+                .requestMatchers(HttpMethod.POST, "/api/payroll/lock")
+                    .hasRole("ADMIN")
 
                 .requestMatchers(HttpMethod.PUT,
+                    "/api/payroll/approve-all",
                     "/api/payroll/{id}/approve",
                     "/api/payroll/{id}/hold")
                     .hasAnyRole("ADMIN", "HR")
@@ -125,7 +106,73 @@ public class SecurityConfig {
                     "/api/payroll/{id}/retry")
                     .hasAnyRole("ADMIN", "HR")
 
-                // ── 5. ADMIN + HR: Dashboard payroll & employee delete ──────
+                // ── 7. Payroll READ: ADMIN + HR + MANAGER ─────────────────────
+                //       (MANAGER sees only their team's payroll via service layer)
+                .requestMatchers(HttpMethod.GET,
+                    "/api/payroll/locked",
+                    "/api/payroll/report",
+                    "/api/payroll/summary",
+                    "/api/payroll/month")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 8. Form 16 WRITE: ADMIN + HR only ─────────────────────────
+                .requestMatchers(HttpMethod.POST,
+                    "/api/admin/form16/upload-bulk",
+                    "/api/admin/form16/upload/**")
+                    .hasAnyRole("ADMIN", "HR")
+
+                .requestMatchers(HttpMethod.DELETE, "/api/admin/form16/**")
+                    .hasAnyRole("ADMIN", "HR")
+
+                // ── 9. Form 16 READ: ADMIN + HR + MANAGER ─────────────────────
+                .requestMatchers(HttpMethod.GET,
+                    "/api/admin/form16/list",
+                    "/api/admin/form16/status")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 10. Attendance WRITE: ADMIN + HR only ─────────────────────
+                .requestMatchers(HttpMethod.POST, "/api/attendance/manual")
+                    .hasAnyRole("ADMIN", "HR")
+
+                // ── 11. Attendance EXPORT: ADMIN + HR + MANAGER ───────────────
+                .requestMatchers(HttpMethod.GET, "/api/attendance/export/**")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 12. Attendance REPORTS + EDIT HISTORY: ADMIN + HR + MANAGER
+                .requestMatchers(HttpMethod.GET,
+                    "/api/attendance/edit-history",
+                    "/api/attendance/report/daily",
+                    "/api/attendance/report/monthly")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 13. Leave balance report: ADMIN + HR + MANAGER ────────────
+                .requestMatchers(HttpMethod.GET, "/api/leaves/report/balance")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 14. Leave approval / rejection: ADMIN + HR + MANAGER ───────
+                .requestMatchers(HttpMethod.PATCH,
+                    "/api/leaves/{id}/approve",
+                    "/api/leaves/{id}/reject")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                .requestMatchers(HttpMethod.GET,
+                    "/api/leaves/pending",
+                    "/api/leaves/pending/manager/{managerEmployeeId}")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER")
+
+                .requestMatchers(HttpMethod.GET, "/api/leaves/employee/{empId}")
+                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE")
+
+                // ── 15. Dashboard views: ADMIN + HR + MANAGER ─────────────────
+                .requestMatchers(HttpMethod.GET,
+                    "/api/dashboard/overview",
+                    "/api/dashboard/employees",
+                    "/api/dashboard/attendance",
+                    "/api/dashboard/departments",
+                    "/api/dashboard/payroll")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
+
+                // ── 16. Dashboard payroll actions: ADMIN + HR ──────────────────
                 .requestMatchers(HttpMethod.POST,
                     "/api/dashboard/payroll/generate",
                     "/api/dashboard/payroll/{id}/pay",
@@ -137,73 +184,22 @@ public class SecurityConfig {
                     "/api/dashboard/payroll/{id}/hold")
                     .hasAnyRole("ADMIN", "HR")
 
-                .requestMatchers(HttpMethod.DELETE,
-                    "/api/dashboard/employees/{id}")
+                .requestMatchers(HttpMethod.DELETE, "/api/dashboard/employees/{id}")
                     .hasAnyRole("ADMIN", "HR")
 
-                // ── 6. ADMIN + HR: Manual attendance & exports ──────────────
-                .requestMatchers(
-                    HttpMethod.POST, "/api/attendance/manual")
-                    .hasAnyRole("ADMIN", "HR")
-
-                .requestMatchers(
-                    HttpMethod.GET, "/api/attendance/export/**")
-                    .hasAnyRole("ADMIN", "HR")
-
-                // ── 7. ADMIN + HR: Leave balance report ────────────────────
-                .requestMatchers(
-                    HttpMethod.GET, "/api/leaves/report/balance")
-                    .hasAnyRole("ADMIN", "HR")
-                    
-                    .requestMatchers(HttpMethod.GET, "/api/attendance/edit-history")
-                    .hasAnyRole("ADMIN", "HR")
-
-                // ── 8. ADMIN + HR + MANAGER: Dashboard views ───────────────
-                .requestMatchers(HttpMethod.GET,
-                    "/api/dashboard/overview",
-                    "/api/dashboard/employees",
-                    "/api/dashboard/attendance",
-                    "/api/dashboard/departments",
-                    "/api/dashboard/payroll")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER")
-
-                // ── 9. ADMIN + HR + MANAGER: Leave approval / rejection ─────
-                .requestMatchers(HttpMethod.PATCH,
-                    "/api/leaves/{id}/approve",
-                    "/api/leaves/{id}/reject")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER")
-
-                .requestMatchers(HttpMethod.GET,
-                    "/api/leaves/pending",
-                    "/api/leaves/pending/manager/{managerEmployeeId}")
-                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER")
-                .requestMatchers(HttpMethod.GET, "/api/leaves/employee/{empId}")
-                    .hasAnyRole("ADMIN", "SUPER_ADMIN", "HR", "MANAGER", "EMPLOYEE")
-
-                // ── 10. ADMIN + HR + MANAGER: Attendance reports ────────────
-                .requestMatchers(HttpMethod.GET,
-                    "/api/attendance/report/daily",
-                    "/api/attendance/report/monthly")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER")
-
-                // ── 11. ADMIN + HR + MANAGER: Admin calendar view ───────────
-                .requestMatchers(HttpMethod.GET, "/api/calendar/admin")
-                    .hasAnyRole("ADMIN", "HR", "MANAGER")
-
-                // ── 11a. Holiday CRUD: view = all roles, manage = ADMIN + HR ─
+                // ── 17. Calendar: holiday manage = ADMIN + HR; view = all ──────
                 .requestMatchers(HttpMethod.POST,   "/api/calendar/holidays")
                     .hasAnyRole("ADMIN", "HR")
-
                 .requestMatchers(HttpMethod.PUT,    "/api/calendar/holidays/{id}")
                     .hasAnyRole("ADMIN", "HR")
-
                 .requestMatchers(HttpMethod.DELETE, "/api/calendar/holidays/{id}")
                     .hasAnyRole("ADMIN", "HR")
-
                 .requestMatchers(HttpMethod.GET,    "/api/calendar/holidays")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+                .requestMatchers(HttpMethod.GET,    "/api/calendar/admin")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER")
 
-                // ── 12. ALL AUTHENTICATED: Own attendance ────────────────────
+                // ── 18. ALL AUTHENTICATED: own attendance check-in / check-out ─
                 .requestMatchers(HttpMethod.POST,
                     "/api/attendance/checkin",
                     "/api/attendance/checkout")
@@ -213,49 +209,54 @@ public class SecurityConfig {
                     "/api/attendance/today",
                     "/api/attendance/date")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
-                    
-                    .requestMatchers(HttpMethod.PUT, "/api/attendance/{id}/edit")
+
+                .requestMatchers(HttpMethod.PUT, "/api/attendance/{id}/edit")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 13. ALL AUTHENTICATED: Own leave ────────────────────────
-                .requestMatchers(
-                    HttpMethod.POST, "/api/leaves/apply")
+                // ── 19. ALL AUTHENTICATED: own payslip, leave balance ──────────
+                .requestMatchers(HttpMethod.GET, "/api/payroll/{id}/payslip")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 14. ALL AUTHENTICATED: Own profile ──────────────────────
-                .requestMatchers(
-                    HttpMethod.GET, "/api/employee/{id}")
+                .requestMatchers(HttpMethod.GET, "/api/leaves/balance/summary/{empId}")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 16. ALL AUTHENTICATED: Own payslip ──────────────────────
+                // ── 20. ALL AUTHENTICATED: own leave ──────────────────────────
+                .requestMatchers(HttpMethod.POST, "/api/leaves/apply")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+
+                // ── 21. ALL AUTHENTICATED: own profile ────────────────────────
+                .requestMatchers(HttpMethod.GET, "/api/employee/{id}")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+
+                // ── 22. ALL AUTHENTICATED: own payroll history ────────────────
                 .requestMatchers(HttpMethod.GET,
-                    "/api/payroll/month",
                     "/api/payroll/employee/{employeeId}")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 17. ALL AUTHENTICATED: Personal calendar ────────────────
-                .requestMatchers(
-                    HttpMethod.GET, "/api/calendar/employee/{employeeId}")
+                // ── 23. ALL AUTHENTICATED: personal calendar ──────────────────
+                .requestMatchers(HttpMethod.GET, "/api/calendar/employee/{employeeId}")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
 
-                // ── 18. ALL AUTHENTICATED: File uploads ──────────────────────
+                // ── 24. ALL AUTHENTICATED: own Form 16 ────────────────────────
+                .requestMatchers("/api/employee/form16/**")
+                    .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
+
+                // ── 25. ALL AUTHENTICATED: file uploads ───────────────────────
                 .requestMatchers("/api/upload/**")
                     .hasAnyRole("ADMIN", "HR", "MANAGER", "EMPLOYEE")
-                    
+
                 .requestMatchers(HttpMethod.PUT, "/api/auth/update-password").authenticated()
 
-                // ── 19. Deny anything else not matched above ─────────────────
+                // ── 26. Deny anything else ────────────────────────────────────
                 .anyRequest().authenticated()
             )
 
-            // JWT filter runs before Spring's username/password filter
             .addFilterBefore(jwtAuthenticationFilter,
                 UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
-   
     @Bean
     public PasswordEncoder passwordEncoder() {
         return NoOpPasswordEncoder.getInstance();
@@ -267,7 +268,6 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
@@ -275,7 +275,6 @@ public class SecurityConfig {
         configuration.addAllowedHeader("*");
         configuration.addAllowedMethod("*");
         configuration.setAllowCredentials(true);
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

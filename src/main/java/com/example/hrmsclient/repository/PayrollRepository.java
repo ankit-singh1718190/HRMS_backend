@@ -35,4 +35,13 @@ public interface PayrollRepository extends JpaRepository<Payroll, Long> {
 
     @Query("SELECT SUM(p.netSalary) FROM Payroll p WHERE p.payrollMonth = :month AND p.status = 'PAID'")
     BigDecimal getTotalNetSalaryByMonth(@Param("month") LocalDate month);
+    @Query("SELECT p FROM Payroll p JOIN FETCH p.employee WHERE p.id = :id")
+    Optional<Payroll> findByIdWithEmployee(@Param("id") Long id);
+    @Query("""
+    		SELECT p FROM Payroll p
+    		JOIN FETCH p.employee e
+    		WHERE p.payrollMonth = :month
+    		ORDER BY e.firstName
+    		""")
+    		List<Payroll> findByPayrollMonthWithEmployee(@Param("month") LocalDate month);
 }

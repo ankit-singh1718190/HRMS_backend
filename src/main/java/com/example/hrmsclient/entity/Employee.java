@@ -5,11 +5,14 @@ import jakarta.persistence.Id;
 import jakarta.validation.constraints.*;
 import org.springframework.data.annotation.*;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
-
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import java.util.Collection;
+import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.List;
 import jakarta.persistence.Version;
 
 @Entity
@@ -25,7 +28,7 @@ import jakarta.persistence.Version;
     }
 )
 @EntityListeners(AuditingEntityListener.class)
-public class Employee {
+public class Employee implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,6 +36,10 @@ public class Employee {
     @Column(name = "employee_id", unique = true, nullable = false)
     @NotBlank(message = "Employee ID is required")
     private String employeeId;
+
+    @ManyToOne
+    @JoinColumn(name = "manager_id")
+    private Employee manager;
 
     @Version
     private Long version;
@@ -97,7 +104,6 @@ public class Employee {
     private String previousCtc;
     private String higherQualification;
 
-
     @NotBlank @Column(length = 30) private String role;
 
     @Enumerated(EnumType.STRING)
@@ -107,9 +113,6 @@ public class Employee {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;
-
-    @Column(name = "reporting_manager", length = 20)
-    private String reportingManager;
 
     // Kept for backward compat; prefer exitDate
     private LocalDate resignationDate;
@@ -133,6 +136,8 @@ public class Employee {
     @Column(length = 500) private String document1Url;
     @Column(length = 500) private String document2Url;
     @Column(length = 500) private String document3Url;
+    
+    private LocalDate attendanceDate;
 
     // Relationships
     @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL,
@@ -156,7 +161,42 @@ public class Employee {
         this.exitDate         = LocalDate.now();
     }
 
-    // ── Getters & Setters
+    // ── UserDetails implementation ──────────────────────────────────────────
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority(
+                "ROLE_" + (role != null ? role.toUpperCase() : "EMPLOYEE")));
+    }
+
+    /** Spring Security username = emailId */
+    @Override
+    public String getUsername() {
+        return emailId;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return !deleted;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return !deleted;
+    }
+
+    // ── Getters & Setters ───────────────────────────────────────────────────
+
     public Long getId()                           { return id; }
     public void setId(Long id)                    { this.id = id; }
 
@@ -271,9 +311,6 @@ public class Employee {
     public EmploymentStatus getEmploymentStatus()              { return employmentStatus; }
     public void setEmploymentStatus(EmploymentStatus v)        { this.employmentStatus = v; }
 
-    public String getReportingManager()                        { return reportingManager; }
-    public void setReportingManager(String reportingManager)   { this.reportingManager = reportingManager; }
-
     public LocalDate getResignationDate()              { return resignationDate; }
     public void setResignationDate(LocalDate v)        { this.resignationDate = v; }
 
@@ -312,4 +349,16 @@ public class Employee {
 
     public List<Attendance> getAttendances()           { return attendances; }
     public void setAttendances(List<Attendance> v)     { this.attendances = v; }
+
+    public Employee getManager()                       { return manager; }
+    public void setManager(Employee manager)           { this.manager = manager; }
+
+	public LocalDate getAttendanceDate() {
+		return attendanceDate;
+	}
+
+	public void setAttendanceDate(LocalDate attendanceDate) {
+		this.attendanceDate = attendanceDate;
+	}
+    
 }

@@ -29,7 +29,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/admin/form16")
-@PreAuthorize("hasAnyRole('ADMIN','HR')")
+
 public class AdminForm16Controller {
 
     private final Form16UploadService       uploadService;
@@ -43,6 +43,7 @@ public class AdminForm16Controller {
 
     // ── BULK UPLOAD (ZIP) ─────────────────────────────────────────────────────
     @PostMapping("/upload-bulk")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<?> uploadBulkZip(
             @RequestParam("file") MultipartFile file,
             @RequestParam("fy") String financialYear,
@@ -68,6 +69,7 @@ public class AdminForm16Controller {
 
     // ── SINGLE UPLOAD ─────────────────────────────────────────────────────────
     @PostMapping("/upload/{employeeId}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<?> uploadSingle(
             @PathVariable Long employeeId,
             @RequestParam("fy") String financialYear,
@@ -94,6 +96,7 @@ public class AdminForm16Controller {
 
     // ── LIST BY FINANCIAL YEAR ────────────────────────────────────────────────
     @GetMapping("/list")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     @Transactional(readOnly = true)
     public ResponseEntity<?> listByYear(@RequestParam("fy") String financialYear) {
         List<Form16Document> docs =
@@ -119,6 +122,7 @@ public class AdminForm16Controller {
     // ── STATUS SUMMARY FOR FY ─────────────────────────────────────────────────
     @GetMapping("/status")
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> statusByYear(@RequestParam("fy") String financialYear) {
         long total      = form16Repository.countByFinancialYear(financialYear);
         long downloaded = form16Repository.countByFinancialYearAndDownloadedTrue(financialYear);
@@ -135,6 +139,7 @@ public class AdminForm16Controller {
 
     // ── DELETE RECORD ─────────────────────────────────────────────────────────
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','HR')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         form16Repository.deleteById(id);
         return ResponseEntity.ok(Map.of(
@@ -143,4 +148,3 @@ public class AdminForm16Controller {
         ));
     }
 }
-

@@ -4,6 +4,7 @@ import com.example.hrmsclient.dto.AttendanceRequestDTO;
 import com.example.hrmsclient.dto.CheckInRequestDTO;
 import com.example.hrmsclient.dto.EditAttendanceRequestDTO;
 import com.example.hrmsclient.entity.Attendance;
+import com.example.hrmsclient.entity.Employee;
 import com.example.hrmsclient.service.AttendanceExcelService;
 import com.example.hrmsclient.service.AttendanceService;
 import jakarta.validation.Valid;
@@ -95,11 +96,18 @@ public class AttendanceController {
         return ResponseEntity.ok(response);
     }
 
+    // ── Now receives Employee user so manager scoping works ───────────────────
     @GetMapping("/date")
     public ResponseEntity<?> getAttendanceByDate(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        List<Map<String, Object>> records = attendanceService.getAttendanceByDate(date);
-        return ResponseEntity.ok(Map.of("status", "success", "date", date.toString(), "data", records, "total", records.size()));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @AuthenticationPrincipal Employee user) {                          // ← added
+        List<Map<String, Object>> records = attendanceService.getAttendanceByDate(date, user); // ← added user
+        return ResponseEntity.ok(Map.of(
+            "status", "success",
+            "date",   date.toString(),
+            "data",   records,
+            "total",  records.size()
+        ));
     }
 
     @PostMapping("/manual")
@@ -143,14 +151,14 @@ public class AttendanceController {
         ));
     }
 
-    // ── EDIT HISTORY — Admin/HR only ──────────────────────────────────────────
-    // GET /api/attendance/edit-history?from=2026-03-01&to=2026-03-31
+    // ── Edit History — manager sees only their team's edits ───────────────────
     @GetMapping("/edit-history")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> getEditHistory(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-        List<Map<String, Object>> history = attendanceService.getAllEditHistory(from, to);
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @AuthenticationPrincipal Employee user) {                          // ← added
+        List<Map<String, Object>> history = attendanceService.getAllEditHistory(from, to, user); // ← added user
         return ResponseEntity.ok(Map.of(
             "status", "success",
             "from",   from.toString(),
@@ -160,25 +168,39 @@ public class AttendanceController {
         ));
     }
 
+    // ── Daily Report — manager sees only their team ───────────────────────────
     @GetMapping("/report/daily")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> dailyReport(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String employeeId,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String employeeType,
+            @AuthenticationPrincipal Employee user) {                          // ← added
         LocalDate reportDate = date != null ? date : LocalDate.now();
-        return ResponseEntity.ok(Map.of("status", "success", "date", reportDate.toString(),
-            "data", attendanceService.getDailyReport(reportDate)));
+        return ResponseEntity.ok(Map.of(
+            "status", "success",
+            "date",   reportDate.toString(),
+            "data",   attendanceService.getDailyReport(reportDate, name, employeeId, department, employeeType, user) // ← added user
+        ));
     }
 
+    // ── Monthly Report — manager sees only their team ─────────────────────────
     @GetMapping("/report/monthly")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<?> monthlyReport(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) {
-        return ResponseEntity.ok(Map.of("status", "success", "month", month.toString(),
-            "data", attendanceService.getMonthlyReport(month)));
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month,
+            @AuthenticationPrincipal Employee user) {                          // ← added
+        return ResponseEntity.ok(Map.of(
+            "status", "success",
+            "month",  month.toString(),
+            "data",   attendanceService.getMonthlyReport(month, user)          // ← added user
+        ));
     }
 
     @GetMapping("/export/daily")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<byte[]> exportDaily(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date)
             throws Exception {
@@ -188,7 +210,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/export/monthly")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<byte[]> exportMonthly(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate month) throws Exception {
         byte[] bytes = attendanceExcelService.exportMonthly(month);
@@ -196,7 +218,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/export/yearly")
-    @PreAuthorize("hasAnyRole('ADMIN','HR')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR','MANAGER')")
     public ResponseEntity<byte[]> exportYearly(@RequestParam int year) throws Exception {
         return excelResponse(attendanceExcelService.exportYearly(year), "attendance_yearly_" + year + ".xlsx");
     }

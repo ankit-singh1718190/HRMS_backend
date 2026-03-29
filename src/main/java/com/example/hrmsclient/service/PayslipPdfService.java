@@ -80,8 +80,11 @@ public class PayslipPdfService {
         left.setBackgroundColor(PRIMARY);
         left.setPadding(20);
         left.setBorder(Rectangle.NO_BORDER);
-        left.addElement(new Phrase(companyName.toUpperCase(), FONT_TITLE));
-        left.addElement(new Phrase("Human Resource Management System", FONT_SUB));
+        Font companyFont = new Font(Font.FontFamily.HELVETICA, 18, Font.BOLD, BaseColor.WHITE);
+        Font taglineFont = new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, BaseColor.WHITE);
+
+        left.addElement(new Phrase("StripeData", companyFont));
+        left.addElement(new Phrase("Result Driven Future Ready", taglineFont));
         header.addCell(left);
 
         PdfPCell right = new PdfPCell();
